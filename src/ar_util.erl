@@ -235,3 +235,11 @@ genesis_wallets() ->
 		end,
 		string:tokens(binary_to_list(Bin), [10])
 	).
+
+%% @doc Timeout test.
+ slow_test_() ->
+	 {timeout, 60,
+  		fun() ->
+      	timer:sleep(10000),
+				1 = 1
+    end}.
