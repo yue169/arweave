@@ -520,6 +520,9 @@ integrate_block_from_miner(
 		),
 	NewS = OldS#state { wallet_list = WalletList },
 	% Build the block record, verify it, and gossip it to the other nodes.
+	%TODO
+	TotalTransferred = 0,
+	New_Total_Size = TotalTransferred + TotalSize,
 	[NextB|_] =
 		ar_weave:add(
 			HashList,
@@ -529,7 +532,7 @@ integrate_block_from_miner(
 			Nonce,
 			RewardAddr,
 			ar_util:calculate_txs_size(MinedTXs),
-			TotalSize + TotalTransferred
+			New_Total_Size = TotalSize + TotalTransferred
 		),
 	case validate(NewS, NextB, ar_util:get_head_block(HashList), find_recall_block(HashList)) of
 		false ->

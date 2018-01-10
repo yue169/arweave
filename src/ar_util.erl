@@ -67,11 +67,7 @@ decode_base64_safe(Str) ->
 	).
 
 calculate_txs_size(TXs) ->
-	case TXs of
-		[] -> 0;
-		[[]] -> 0;
-		_ -> lists:sum(lists:map(fun(X) -> byte_size(ar_tx:to_binary(X)) end, TXs))
-	end.
+	lists:sum(lists:map(fun(X) -> byte_size(ar_tx:to_binary(X)) end, TXs)).
 
 do_decode_base64_safe([]) -> [];
 do_decode_base64_safe([$_|T]) ->

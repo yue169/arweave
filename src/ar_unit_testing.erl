@@ -4,37 +4,37 @@
 
 %%% Configures eunit to avoid timeouts.
 
+%TODO write docs
+
 %% @doc Timeout in seconds.
 -define(TIMEOUT, 600).
 
+%% @doc Run all unit tests.
 run_all_tests() ->
-	Modules = get_modules(),
-	run_module_tests(Modules).
+	run_module_tests(get_modules()).
 
-generate_test(ModuleName, FunctionName) ->
-	{generator, ModuleName, list_to_atom(FunctionName)}.
-
+%% @doc
 get_tests_from_module(M) ->
-	Fs = M:module_info(functions),
-	FNames = lists:map(fun({X,_}) -> atom_to_list(X) end, Fs),
-	[ X || X <- FNames, lists:suffix("test", X) ].
+	[ X || {X, _} <- M:module_info(functions), lists:suffix("test", atom_to_list(X)) ].
 
-run_module_tests([M]) ->
-	Ts = get_tests_from_module(M),
-	run_tests(M, Ts);
+run_module_tests([]) -> ok;
 run_module_tests([M|Ms]) ->
 	Ts = get_tests_from_module(M),
 	run_tests(M, Ts),
 	run_module_tests(Ms).
 
-run_tests(M, [T]) ->
-	eunit:test( {timeout, ?TIMEOUT, generate_test(M,T)});
+%run_tests(M, Ts) ->
+%	eunit:test(
+%		[ {timeout, ?TIMEOUT, fun M:T/0} || T <- Ts ]
+%	).
+run_tests(_, []) -> ok;
 run_tests(M, [T|Ts]) ->
-	eunit:test( {timeout, ?TIMEOUT, generate_test(M,T)}),
+	eunit:test( {timeout, ?TIMEOUT, fun M:T/0}),
 	run_tests(M, Ts).
 
 get_modules() ->
 	[
+		ar_tx,
 		ar_fork_recovery,
 		ar_gossip,
 		ar_http_iface,
@@ -54,7 +54,6 @@ get_modules() ->
 		ar_storage,
 		ar_test_monitor,
 		ar_test_sup,
-		ar_tx,
 		ar_util,
 		ar_wallet,
 		ar_weave
