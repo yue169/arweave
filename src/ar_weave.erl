@@ -1,5 +1,5 @@
 -module(ar_weave).
--export([init/0, init/1, init/2, add/1, add/2, add/3, add/4, add/5, add/6]).
+-export([init/0, init/1, init/2, add/1, add/2, add/3, add/4, add/5, add/6, add/8]).
 -export([hash/3, indep_hash/1]).
 -export([verify/1, verify_indep/2]).
 -export([calculate_recall_block/1, calculate_recall_block/2]).
@@ -23,7 +23,9 @@ init(WalletList, StartingDiff) ->
 			txs = [],
 			wallet_list = WalletList,
 			hash_list = [],
-			diff = StartingDiff
+			diff = StartingDiff,
+			total_transferred = 0,
+			total_size = 0
 		},
 	B1 = B0#block { last_retarget = B0#block.timestamp },
 	[B1#block { indep_hash = indep_hash(B1) }].
@@ -38,16 +40,38 @@ add(Bs, HashList, TXs, Nonce) ->
 	add(Bs, HashList, [], TXs, Nonce).
 add(Bs, HashList, WalletList, TXs, Nonce) ->
 	add(Bs, HashList, WalletList, TXs, Nonce, unclaimed).
-add([Hash|Bs], HashList, WalletList, TXs, Nonce, RewardAddr) when is_binary(Hash) ->
+add(Bs, HashList, WalletList, TXs, Nonce, RewardAddr) ->
+	add(Bs, HashList,	WalletList, TXs, Nonce,	RewardAddr,	0, 0).
+add(
+	[Hash|Bs],
+	HashList,
+	WalletList,
+	TXs,
+	Nonce,
+	RewardAddr,
+	Total_transferred,
+	Total_size
+) when is_binary(Hash) ->
 	add(
 		[ar_storage:read_block(Hash)|Bs],
 		HashList,
 		WalletList,
 		TXs,
 		Nonce,
-		RewardAddr
+		RewardAddr,
+		Total_transferred,
+		Total_size
 	);
-add(Bs = [B|_], HashList, WalletList, TXs, Nonce, RewardAddr) ->
+add(
+	[B|Bs],
+	HashList,
+	WalletList,
+	TXs,
+	Nonce,
+	RewardAddr,
+	TotalTransferred,
+	TotalSize
+) when is_record(B, block)->
 	RawNewB =
 		#block {
 			nonce = Nonce,
@@ -58,7 +82,9 @@ add(Bs = [B|_], HashList, WalletList, TXs, Nonce, RewardAddr) ->
 			wallet_list = WalletList,
 			txs = TXs,
 			diff = B#block.diff,
-			reward_addr = RewardAddr
+			reward_addr = RewardAddr,
+			total_transferred = TotalTransferred,
+			total_size = TotalSize
 		},
 	NewB = ar_retarget:maybe_retarget(RawNewB, B),
 	[NewB#block { indep_hash = indep_hash(NewB) }|Bs].

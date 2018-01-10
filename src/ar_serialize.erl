@@ -29,7 +29,9 @@ block_to_json_struct(
 		txs = TXs,
 		hash_list = HashList,
 		wallet_list = WalletList,
-		reward_addr = RewardAddr
+		reward_addr = RewardAddr,
+    total_transferred = Transfer,
+  	total_size = Size
 	}) ->
 	{struct,
 		[
@@ -65,7 +67,9 @@ block_to_json_struct(
 				if RewardAddr == unclaimed -> "unclaimed";
 				true -> ar_util:encode(RewardAddr)
 				end
-			}
+			},
+      {total_transferred, Transfer},
+      {total_size, Size}
 		]
 	}.
 
@@ -103,7 +107,9 @@ json_struct_to_block({struct, BlockStruct}) ->
 			case find_value("reward_addr", BlockStruct) of
 				"unclaimed" -> unclaimed;
 				StrAddr -> ar_util:decode(StrAddr)
-			end
+			end,
+    total_transferred = find_value("total_transferred", BlockStruct),
+    total_size = find_value("total_size", BlockStruct)
 	}.
 
 %% @doc Translate a transaction into JSON.

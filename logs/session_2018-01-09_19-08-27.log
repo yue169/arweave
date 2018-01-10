@@ -1,0 +1,215 @@
+
+=INFO REPORT==== 9-Jan-2018::19:08:27 ===
+    starting_server
+    session_log: "logs/session_2018-01-09_19-08-27.log"
+    port: 1984
+    init_new_blockweave: false
+    automine: false
+    miner: <0.389.0>
+    peers: []
+    polling: false
+
+=INFO REPORT==== 9-Jan-2018::19:08:37 ===
+    node_starting_miner: <0.411.0>
+    recall_block: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:37 ===
+    node: <0.411.0>
+    started_miner: <0.413.0>
+
+=INFO REPORT==== 9-Jan-2018::19:08:37 ===
+    height: 0
+    services: []
+
+=INFO REPORT==== 9-Jan-2018::19:08:37 ===
+
+=INFO REPORT==== 9-Jan-2018::19:08:37 ===
+    node: <0.411.0>
+    accepted_block: 1
+    hash: <<238,48,52,201,222,161,7,219,251,40,9,116,137,151,84,193,182,197,
+            174,107,79,247,99,129,85,204,100,71,219,38,33,126>>
+    txs: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:37 ===
+    height: 1
+    services: [{service,"test",{127,0,0,1,1984},1}]
+
+=INFO REPORT==== 9-Jan-2018::19:08:37 ===
+    {service,"test",{127,0,0,1,1984},1}
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    height: 1
+    services: [{service,"test",{127,0,0,1,1984},1}]
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    {service,"test",{127,0,0,1,1984},1}
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    height: 1
+    services: [{service,"test",{127,0,0,1,1984},1}]
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    {service,"test",{127,0,0,1,1984},1}
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    height: 0
+    services: []
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    height: 0
+    services: [{service,"test",{127,0,0,1,1984},1}]
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    {service,"test",{127,0,0,1,1984},1}
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    height: 0
+    services: [{service,"test",{127,0,0,1,1984},1}]
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    {service,"test",{127,0,0,1,1984},1}
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    node_starting_miner: <0.415.0>
+    recall_block: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    node: <0.415.0>
+    started_miner: <0.417.0>
+
+=INFO REPORT==== 9-Jan-2018::19:08:38 ===
+    node: <0.415.0>
+    accepted_block: 1
+    hash: <<171,108,135,149,117,129,103,188,123,252,124,238,224,221,14,14,68,
+            187,65,215,164,223,102,209,110,228,106,61,6,85,154,106>>
+    txs: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:39 ===
+    node_starting_miner: <0.415.0>
+    recall_block: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:39 ===
+    node: <0.415.0>
+    started_miner: <0.418.0>
+
+=INFO REPORT==== 9-Jan-2018::19:08:39 ===
+    node: <0.415.0>
+    accepted_block: 2
+    hash: <<219,163,217,87,135,86,73,30,143,38,117,165,103,251,33,221,129,26,
+            57,233,38,136,8,83,127,77,215,35,72,213,223,146>>
+    txs: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:40 ===
+    height: 2
+    services: [{service,"test",{127,0,0,1,1984},1}]
+
+=INFO REPORT==== 9-Jan-2018::19:08:40 ===
+
+=INFO REPORT==== 9-Jan-2018::19:08:40 ===
+    height: 2
+    services: []
+
+=INFO REPORT==== 9-Jan-2018::19:08:40 ===
+
+=INFO REPORT==== 9-Jan-2018::19:08:50 ===
+    node_starting_miner: <0.31429.0>
+    recall_block: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:50 ===
+    node: <0.31429.0>
+    started_miner: <0.31430.0>
+
+=INFO REPORT==== 9-Jan-2018::19:08:50 ===
+    node: <0.31429.0>
+    accepted_block: 1
+    hash: <<167,10,82,138,109,171,118,3,142,232,73,116,223,60,110,213,213,205,
+            19,86,125,212,183,146,108,121,183,182,76,164,187,207>>
+    txs: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:50 ===
+    node_starting_miner: <0.31429.0>
+    recall_block: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:50 ===
+    node: <0.31429.0>
+    started_miner: <0.31431.0>
+
+=INFO REPORT==== 9-Jan-2018::19:08:50 ===
+    node: <0.31429.0>
+    accepted_block: 2
+    hash: <<230,41,0,61,68,162,208,137,47,88,65,128,193,26,38,168,210,139,226,
+            3,195,194,253,234,75,232,140,8,249,26,121,199>>
+    txs: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:51 ===
+    joining_network
+    node: <0.31432.0>
+    peers: [<0.31429.0>]
+    height: 2
+
+=INFO REPORT==== 9-Jan-2018::19:08:51 ===
+    node_joined_successfully
+    height: 2
+
+=INFO REPORT==== 9-Jan-2018::19:08:52 ===
+    node_starting_miner: <0.31435.0>
+    recall_block: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:52 ===
+    node: <0.31435.0>
+    started_miner: <0.31436.0>
+
+=INFO REPORT==== 9-Jan-2018::19:08:52 ===
+    node: <0.31435.0>
+    accepted_block: 1
+    hash: <<143,76,176,162,6,6,9,22,153,28,158,106,86,235,252,180,168,21,110,
+            123,195,197,19,75,80,111,8,96,108,235,57,251>>
+    txs: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:52 ===
+    node_starting_miner: <0.31435.0>
+    recall_block: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:52 ===
+    node: <0.31435.0>
+    started_miner: <0.31437.0>
+
+=INFO REPORT==== 9-Jan-2018::19:08:52 ===
+    node: <0.31435.0>
+    accepted_block: 2
+    hash: <<175,72,132,170,43,180,52,32,59,138,218,244,90,137,33,198,96,162,
+            162,109,202,58,192,199,232,176,76,237,77,59,119,184>>
+    txs: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:52 ===
+    joining_network
+    node: <0.31438.0>
+    peers: [<0.31435.0>]
+    height: 2
+
+=INFO REPORT==== 9-Jan-2018::19:08:52 ===
+    node_joined_successfully
+    height: 2
+
+=INFO REPORT==== 9-Jan-2018::19:08:53 ===
+    node_starting_miner: <0.31438.0>
+    recall_block: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:53 ===
+    node: <0.31438.0>
+    started_miner: <0.31440.0>
+
+=INFO REPORT==== 9-Jan-2018::19:08:53 ===
+    node: <0.31438.0>
+    accepted_block: 3
+    hash: <<94,222,253,234,21,15,120,29,63,16,5,60,19,49,119,148,211,173,230,
+            166,225,119,35,117,249,202,172,31,157,126,131,63>>
+    txs: 0
+
+=INFO REPORT==== 9-Jan-2018::19:08:53 ===
+    accepted_foreign_block: <<94,222,253,234,21,15,120,29,63,16,5,60,19,49,119,
+                              148,211,173,230,166,225,119,35,117,249,202,172,
+                              31,157,126,131,63>>
+    height: 3

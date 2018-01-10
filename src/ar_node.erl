@@ -23,7 +23,8 @@
 	mining_delay = 0,
 	recovery = undefined,
 	automine = false,
-	reward_addr = unclaimed
+	reward_addr = unclaimed,
+	total_size = 0
 }).
 
 %% Maximum number of blocks to hold at any time.
@@ -502,7 +503,8 @@ integrate_block_from_miner(
 			wallet_list = RawWalletList,
 			txs = TXs,
 			gossip = GS,
-			reward_addr = RewardAddr
+			reward_addr = RewardAddr,
+			total_size = TotalSize
 		},
 		MinedTXs, Nonce) ->
 	% Store the transactions that we know about, but were not mined in
@@ -519,7 +521,16 @@ integrate_block_from_miner(
 	NewS = OldS#state { wallet_list = WalletList },
 	% Build the block record, verify it, and gossip it to the other nodes.
 	[NextB|_] =
-		ar_weave:add(HashList, HashList, WalletList, MinedTXs, Nonce, RewardAddr),
+		ar_weave:add(
+			HashList,
+			HashList,
+			WalletList,
+			MinedTXs,
+			Nonce,
+			RewardAddr,
+			ar_util:calculate_txs_size(MinedTXs),
+			TotalSize + TotalTransferred
+		),
 	case validate(NewS, NextB, ar_util:get_head_block(HashList), find_recall_block(HashList)) of
 		false ->
 			ar:report_console([{miner, self()}, incorrect_nonce]),
@@ -552,7 +563,8 @@ integrate_block_from_miner(
 						hash_list =
 							[NextB#block.indep_hash|HashList],
 						txs = NotMinedTXs, % TXs not included in the block
-						height = NextB#block.height
+						height = NextB#block.height,
+						total_size = New_Total_Size
 					}
 				)
 			)

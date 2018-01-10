@@ -28,9 +28,9 @@ run_module_tests([M|Ms]) ->
 	run_module_tests(Ms).
 
 run_tests(M, [T]) ->
-	eunit:test( {timeout, ?TIMEOUT, generate_test(M,T)}, [verbose]);
+	eunit:test( {timeout, ?TIMEOUT, generate_test(M,T)});
 run_tests(M, [T|Ts]) ->
-	eunit:test( {timeout, ?TIMEOUT, generate_test(M,T)}, [verbose]),
+	eunit:test( {timeout, ?TIMEOUT, generate_test(M,T)}),
 	run_tests(M, Ts).
 
 get_modules() ->

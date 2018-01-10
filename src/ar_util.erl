@@ -9,6 +9,7 @@
 -export([height_from_hashes/1, wallets_from_hashes/1, blocks_from_hashes/1]).
 -export([get_hash/1, get_head_block/1]).
 -export([genesis_wallets/0]).
+-export([calculate_txs_size/1]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -64,6 +65,13 @@ decode_base64_safe(Str) ->
 			$=
 		)
 	).
+
+calculate_txs_size(TXs) ->
+	case TXs of
+		[] -> 0;
+		[[]] -> 0;
+		_ -> lists:sum(lists:map(fun(X) -> byte_size(ar_tx:to_binary(X)) end, TXs))
+	end.
 
 do_decode_base64_safe([]) -> [];
 do_decode_base64_safe([$_|T]) ->
