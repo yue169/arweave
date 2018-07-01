@@ -33,7 +33,8 @@ get(Key) ->
 
 %% @doc Increase the value associated by a key by Val
 increase(Key, Val) ->
-	put(Key, get(Key) + Val).
+	ets:update_counter(?MODULE, Key, Val).
+
 
 %% @doc Remove entries from the performance database older than
 %% ?PEER_TMEOUT
