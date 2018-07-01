@@ -18,6 +18,7 @@
 		ar_util,
 		ar_cleanup,
 		ar_meta_db,
+		ar_manage_peers,
 		ar_storage,
 		ar_serialize,
 		ar_services,
@@ -159,6 +160,7 @@ start(
 	% Start apps which we depend on.
 	inets:start(),
 	ar_meta_db:start(),
+	ar_manage_peers:start(),
 	ar_tx_db:start(),
 	ar_key_db:start(),
 	ar_track_tx_db:start(),
