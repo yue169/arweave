@@ -16,22 +16,8 @@ request(Peer) ->
 	ok = fusco:disconnect(Client),
 	Request.
 request(Method, Peer, Path, Body) ->
-	%ar:report([{ar_httpc_request,Peer},{method,Method}, {path,Path}]),
-	Host="http://" ++ ar_util:format_peer(Peer),
-	{ok, Client} = fusco:start(Host, [{connect_timeout, ?CONNECT_TIMEOUT}]),
-	Result = fusco:request(Client, list_to_binary(Path), Method, [], Body, 1, ?NET_TIMEOUT),
-	ok = fusco:disconnect(Client),
-	case Result of
-		{ok, {{_, _}, _, _, Start, End}} ->
-			[_|RawIP] = string:split(Host, "//"),
-			[IP|_Port] = string:split(RawIP, ":"),
-			case Body of
-				[] -> store_data_time(ar_util:parse_peer(IP), 0, End-Start);
-				_ -> store_data_time(ar_util:parse_peer(IP), byte_size(Body), End-Start)
-			end;
-		_ -> ok
-		end,
-	Result.
+	request(Method, Peer, Path, Body, ?NET_TIMEOUT).
+
 request(Method, Peer, Path, Body, Timeout) ->
 	%ar:report([{ar_httpc_request,Peer},{method,Method}, {path,Path}]),
 	Host="http://" ++ ar_util:format_peer(Peer),
@@ -40,12 +26,7 @@ request(Method, Peer, Path, Body, Timeout) ->
 	ok = fusco:disconnect(Client),
 	case Result of
 		{ok, {{_, _}, _, _, Start, End}} ->
-			[_|RawIP] = string:split(Host, "//"),
-			[IP|_Port] = string:split(RawIP, ":"),
-			case Body of
-				[] -> store_data_time(ar_util:parse_peer(IP), 0, End-Start);
-				_ -> store_data_time(ar_util:parse_peer(IP), byte_size(Body), End-Start)
-			end;
+			store_data_time(Peer, byte_size(Body), End-Start);
 		_ -> ok
 		end,
 	Result.

@@ -750,7 +750,7 @@ has_tx(Peer, ID) ->
 				<<"GET">>,
 				Peer,
 				"/tx/" ++ binary_to_list(ar_util:encode(ID)) ++ "/id",
-				[]
+				<<>>
 		)
 	of
 		{ok, {{<<"200">>, _}, _, _, _, _}} -> true;
@@ -859,7 +859,7 @@ get_current_block(Peer) ->
 			<<"GET">>,
 			Peer,
 			"/current_block",
-			[],
+			<<>>,
 			10000
 		)
 	).
@@ -872,7 +872,7 @@ get_tx_reward(Peer, Size) ->
 			<<"GET">>,
 			Peer,
 			"/price/" ++ integer_to_list(Size),
-			[]
+			<<>>
 		),
 	list_to_integer(binary_to_list(Body)).
 
@@ -883,7 +883,7 @@ get_block(Peer, Height) when is_integer(Height) ->
 			<<"GET">>,
 			Peer,
 			"/block/height/" ++ integer_to_list(Height),
-			[]
+			<<>>
 	 	)
 	);
 get_block(Peer, Hash) when is_binary(Hash) ->
@@ -892,7 +892,7 @@ get_block(Peer, Hash) when is_binary(Hash) ->
 			<<"GET">>,
 			Peer,
 			"/block/hash/" ++ binary_to_list(ar_util:encode(Hash)),
-			[]
+			<<>>
 	 	)
 	).
 
@@ -906,7 +906,7 @@ get_encrypted_block(Peer, Hash) when is_binary(Hash) ->
 			<<"GET">>,
 			Peer,
 			"/block/hash/" ++ binary_to_list(ar_util:encode(Hash)) ++ "/encrypted",
-			[]
+			<<>>
 		)
 	).
 
@@ -919,7 +919,7 @@ get_block_subfield(Peer, Hash, Subfield) when is_binary(Hash) ->
 			<<"GET">>,
 			Peer,
 			"/block/hash/" ++ binary_to_list(ar_util:encode(Hash)) ++ "/" ++ Subfield,
-			[]
+			<<>>
 		)
 	);
 %% @doc Get a specified subfield from the block with the given height
@@ -931,7 +931,7 @@ get_block_subfield(Peer, Height, Subfield) when is_integer(Height) ->
 			<<"GET">>,
 			Peer,
 			"/block/height/" ++integer_to_list(Height) ++ "/" ++ Subfield,
-			[]
+			<<>>
 	 	)
 	).
 
@@ -945,7 +945,7 @@ get_full_block(Peer, Hash) when is_binary(Hash) ->
 			<<"GET">>,
 			Peer,
 			"/block/hash/" ++ binary_to_list(ar_util:encode(Hash)) ++ "/all",
-			[]
+			<<>>
 		)
 	).
 
@@ -959,7 +959,7 @@ get_encrypted_full_block(Peer, Hash) when is_binary(Hash) ->
 			<<"GET">>,
 			Peer,
 			"/block/hash/" ++ binary_to_list(ar_util:encode(Hash)) ++ "/all/encrypted",
-			[]
+			<<>>
 		)
 	).
 
@@ -972,7 +972,7 @@ get_tx(Peer, Hash) ->
 			<<"GET">>,
 			Peer,
 			"/tx/" ++ binary_to_list(ar_util:encode(Hash)),
-			[]
+			<<>>
 	 	)
 	).
 
@@ -986,7 +986,7 @@ get_pending_txs(Peer) ->
 					<<"GET">>,
 					Peer,
 					"/tx/pending",
-					[]
+					<<>>
 				),
 			PendingTxs = ar_serialize:dejsonify(Body),
 			[list_to_binary(P) || P <- PendingTxs]
@@ -1009,7 +1009,7 @@ get_info(Peer) ->
 			<<"GET">>,
 			Peer,
 			"/info",
-			[],
+			<<>>,
 			3000
 		)
 	of
@@ -1026,7 +1026,7 @@ get_peers(Peer) ->
 				<<"GET">>,	
 				Peer,
 				"/peers",
-				[]
+				<<>>
 				),
 			PeerArray = ar_serialize:dejsonify(Body),
 			lists:map(fun ar_util:parse_peer/1, PeerArray)
@@ -1183,7 +1183,7 @@ get_balance_test() ->
 			<<"GET">>,
 			{127, 0, 0, 1, 1984},
 			"/wallet/"++ binary_to_list(ar_util:encode(ar_wallet:to_address(Pub1))) ++ "/balance",
-			[]
+			<<>>
 		),
 	?assertEqual(10000, list_to_integer(binary_to_list(Body))).
 
@@ -1199,7 +1199,7 @@ get_presale_balance_test() ->
 			<<"GET">>,
 			{127, 0, 0, 1, 1984},
 			"/wallet/" ++ binary_to_list(ar_util:encode(ar_wallet:to_address(Pub1))) ++ "/balance",
-			[]
+			<<>>
 		),
 	?assertEqual(10000, list_to_integer(binary_to_list(Body))).
 
@@ -1215,7 +1215,7 @@ get_last_tx_single_test() ->
 			<<"GET">>,
 			{127, 0, 0, 1, 1984},
 			"/wallet/" ++ binary_to_list(ar_util:encode(ar_wallet:to_address(Pub1))) ++ "/last_tx",
-			[]
+			<<>>
 		),
 	?assertEqual(<<"TEST_ID">>, ar_util:decode(Body)).
 
@@ -1380,7 +1380,7 @@ add_tx_and_get_last_test() ->
 			<<"GET">>,
 			{127, 0, 0, 1, 1984},
 			"/wallet/" ++ binary_to_list(ar_util:encode(ar_wallet:to_address(Pub1))) ++ "/last_tx",
-			[]
+			<<>>
 		),
 	?assertEqual(ID, ar_util:decode(Body)).
 
@@ -1406,7 +1406,7 @@ get_subfields_of_tx_test() ->
 			<<"GET">>,
 			{127, 0, 0, 1, 1984},
 			"/tx/" ++ binary_to_list(ar_util:encode(TX#tx.id)) ++ "/data",
-			[]
+			<<>>
 		),
 	Orig = TX#tx.data,
 	?assertEqual(Orig, ar_util:decode(Body)).
@@ -1433,7 +1433,7 @@ get_pending_tx_test() ->
 			<<"GET">>,
 			{127, 0, 0, 1, 1984},
 			"/tx/" ++ binary_to_list(ar_util:encode(TX#tx.id)),
-			[]
+			<<>>
 		),
 	?assertEqual("Pending", Body).
 
@@ -1457,7 +1457,7 @@ get_pending_subfield_tx_test() ->
 			<<"GET">>,
 			{127, 0, 0, 1, 1984},
 			"/tx/" ++ binary_to_list(ar_util:encode(TX#tx.id)) ++ "/data",
-			[]
+			<<>>
 		),
 	?assertEqual("Pending", Body).
 
@@ -1484,7 +1484,7 @@ get_multiple_pending_txs_test() ->
 			<<"GET">>,
 			{127, 0, 0, 1, 1984},
 			"/tx/" ++ "pending",
-			[]
+			<<>>
 		),
 	PendingTXs = ar_serialize:dejsonify(Body),
 	?assertEqual([TX1#tx.id, TX2#tx.id], [P || P <- PendingTXs]).
