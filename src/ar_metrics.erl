@@ -203,7 +203,8 @@ handle_full_response(Type, [Req, Code, _Hs, _B, {Timings, Sizes}], _Config) ->
       prometheus_counter:inc(?TOTAL, Labels),
 
       ReqTime=duration(Timings, request),
-      ReqSize= size(Sizes, response),
+      ReqSize= size(Sizes, req_body),
+      RespSize= size(Sizes, response_body),
 
       prometheus_histogram:observe(?REQUEST_DURATION, TypedLabels, ReqTime),
       prometheus_histogram:observe(?REQUEST_HEADERS_DURATION, Labels,
@@ -222,17 +223,7 @@ handle_full_response(Type, [Req, Code, _Hs, _B, {Timings, Sizes}], _Config) ->
                                  size(Sizes, response_body)),
 
       Peer = ar_util:parse_peer(elli_request:peer(Req)),
-      P = case ar_meta_db:get({peer, Peer}) of
-        not_found -> #performance{};
-        X -> X
-      end,
-      ar_meta_db:put({peer, Peer},
-        P#performance {
-          transfers = P#performance.transfers + 1,
-          time = P#performance.time + ReqTime,
-          bytes = P#performance.bytes + ReqSize,
-          timeout = os:system_time(seconds)
-        }),
+      ar_manage_peers:add_perf_data(Peer, server, Code, RespSize, ReqSize, ReqTime),
       ok
   end.
 
@@ -329,6 +320,8 @@ size(Sizes, response) ->
   size(Sizes, response_headers) +
     size(Sizes, response_body);
 size(Sizes, response_headers) ->
+  proplists:get_value(req_body, Sizes);
+size(Sizes, req_body) ->
   proplists:get_value(resp_headers, Sizes);
 size(Sizes, response_body) ->
   case proplists:get_value(chunks, Sizes) of

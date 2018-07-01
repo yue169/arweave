@@ -193,11 +193,13 @@
 
 % @doc A record to define HTTP Performance results for a given node.
 -record(performance, {
-	bytes = 0,
-	time = 0,
+	peer = unspecified,
+	timeout = os:system_time(seconds),
 	transfers = 0,
-	timestamp = 0,
-	timeout = os:system_time(seconds)
+	bytes_sent = 0,
+	bytes_recv = 0,
+	time = 0,
+	timestamp = 0
 }).
 
 %% @doc A Macro to return number of winstons per given AR.

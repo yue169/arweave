@@ -1,6 +1,5 @@
 -module(ar_httpc).
--export([request/1, request/4, request/5, get_performance/1, update_timer/1]).
--export([reset_peer/1]).
+-export([request/1, request/4, request/5]).
 -include("ar.hrl").
 
 %%% A wrapper library for httpc.
@@ -8,13 +7,9 @@
 %%% in the meta db.
 
 %% @doc Perform a HTTP call with the httpc library, store the time required.
-request(Peer) -> 
-	%ar:report([{ar_httpc_request,Peer}]),
-	Host="http://" ++ ar_util:format_peer(Peer),
-	{ok, Client} = fusco:start(Host, [{connect_timeout, ?CONNECT_TIMEOUT}]),
-	{ok, Request} = fusco:request(Client, <<"/">> , <<"GET">>, [], [], 1, ?NET_TIMEOUT),
-	ok = fusco:disconnect(Client),
-	Request.
+request(Peer) ->
+	request(<<"GET">>, Peer, <<"/">>, <<>>, ?NET_TIMEOUT).
+
 request(Method, Peer, Path, Body) ->
 	request(Method, Peer, Path, Body, ?NET_TIMEOUT).
 
@@ -25,49 +20,11 @@ request(Method, Peer, Path, Body, Timeout) ->
 	Result = fusco:request(Client, list_to_binary(Path), Method, [], Body, 1, Timeout),
 	ok = fusco:disconnect(Client),
 	case Result of
-		{ok, {{_, _}, _, _, Start, End}} ->
-			store_data_time(Peer, byte_size(Body), End-Start);
+		{ok, {{Code, _Reason}, _Hdrs, RespBody, Size, Time}} ->
+			ar_manage_peers:add_perf_data(Peer, client, Code,
+				byte_size(Body),byte_size(RespBody), Time);
+		%%{error, Reason} -> TODO
 		_ -> ok
 		end,
 	Result.
 
-%% @doc Update the database with new timing data.
-store_data_time(IP, Bytes, MicroSecs) ->
-	P =
-		case ar_meta_db:get({peer, IP}) of
-			not_found -> #performance{};
-			X -> X
-		end,
-	ar_meta_db:put({peer, IP},
-		P#performance {
-			transfers = P#performance.transfers + 1,
-			time = P#performance.time + MicroSecs,
-			bytes = P#performance.bytes + Bytes
-		}
-	).
-
-%% @doc Return the performance object for a node.
-get_performance(IP) ->
-	case ar_meta_db:get({peer, IP}) of
-		not_found -> #performance{};
-		P -> P
-	end.
-
-%% @doc Reset the performance data for a given peer.
-reset_peer(IP) ->
-	ar_meta_db:put({peer, IP}, #performance{}).
-
-%% @doc Update the "last on list" timestamp of a given peer
-update_timer(IP) ->
-	case ar_meta_db:get({peer, IP}) of
-		not_found -> #performance{};
-		P -> 
-			ar_meta_db:put({peer, IP},
-				P#performance {
-					transfers = P#performance.transfers,
-					time = P#performance.time ,
-					bytes = P#performance.bytes,
-					timestamp = os:system_time(seconds)
-				}
-			)
-	end.

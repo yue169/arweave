@@ -1,8 +1,41 @@
 -module(ar_manage_peers).
+-export([start/0]).
+-export([add_perf_data/6, reset_peer/1]).
+-export([get_performance/1,format_stats/2]).
 -export([update/1, stats/0, reset/0]).
+-include_lib("eunit/include/eunit.hrl").
 -include("ar.hrl").
 
 %%% Manage and update peer lists.
+
+start() ->
+	ar:report([?MODULE]),
+	ets:new(peer_performance, [set, public, named_table, {keypos, 2},
+		{read_concurrency,  true}, {write_concurrency, true} ]),
+	ok.
+
+
+%% @doc Update the database with new performance data.
+%
+add_perf_data(Peer, Handler,Code, Sent, Recv, Time)  when is_binary(Code)->
+	add_perf_data(Peer, Handler,binary_to_integer(Code), Sent, Recv, Time);
+add_perf_data(Peer, _Handler, _Code, Sent, Recv, Time) ->
+	ets:update_counter(peer_performance, Peer,[
+		{3, 1, 1, os:system_time(seconds)}, %timeout - this is tricky we exploit Treshold to apply SetValue.
+		{4, 1},       %requests
+		{5, Sent},   %sent bytes (reqsize in client, and resp size in server)
+		{6, Recv},   %recv bytes (other way around)
+		{7, Time}   %time
+		], #performance{peer=Peer}).
+
+%% @doc Return the performance object for a node.
+get_performance(Peer) ->
+	case ets:lookup(peer_performance, Peer) of
+		[] -> #performance{peer=Peer};
+		[P] -> P;
+		[P|_] -> P
+	end.
+
 
 %% @doc Print statistics about the current peers.
 stats() ->
@@ -14,25 +47,29 @@ stats() ->
 	stats(All).
 stats(Peers) ->
 	lists:foreach(
-		fun(Peer) -> format_stats(Peer, ar_httpc:get_performance(Peer)) end,
+		fun(Peer) -> format_stats(Peer, get_performance(Peer)) end,
 		Peers
 	).
 
+%% @doc Reset the performance data for a given peer.
+reset_peer(Peer) ->
+	ets:insert(peer_performance, #performance{peer=Peer}).
+
 %% @doc Reset all performance counters and connections.
 reset() ->
-	lists:map(fun ar_httpc:reset_peer/1, All = all_peers()),
+	lists:map(fun reset_peer/1, All = all_peers()),
 	ar_bridge:set_remote_peers(whereis(http_bridge_node), All).
 
 %% @doc Return all known peers.
 all_peers() ->
-	[ Peer || {peer, Peer} <- ar_meta_db:keys() ].
+	ets:foldl(fun(T, Acc) -> Acc ++ [T#performance.peer] end, [], peer_performance).
 
 %% @doc Pretty print stats about a node.
 format_stats(Peer, Perf) ->
 	io:format("\t~s ~.2f kb/s (~p transfers)~n",
 		[
 			string:pad(ar_util:format_peer(Peer), 20, trailing, $ ),
-			(Perf#performance.bytes / 1024) / (Perf#performance.time + 1 / 1000000),
+			((Perf#performance.bytes_sent + Perf#performance.bytes_recv) / 1024) / (Perf#performance.time + 1 / 1000000),
 			Perf#performance.transfers
 		]
 	).
@@ -42,7 +79,7 @@ format_stats(Peer, Perf) ->
 %% Peers who have behaved well in the past are favoured in ranking.
 %% New, unknown peers are given 100 blocks of grace.
 update(Peers) ->
-	ar_meta_db:remove_old(os:system_time(seconds)),
+	remove_old(os:system_time(seconds)),
 	{Rankable, Newbies} = 
 		partition_newbies(
 			score(
@@ -85,10 +122,10 @@ responds(Peer) ->
 score(Peers) when is_list(Peers) ->
 	lists:map(fun(Peer) -> {Peer, score(Peer)} end, Peers);
 score(Peer) ->
-	case ar_httpc:get_performance(Peer) of
+	case get_performance(Peer) of
 		P when P#performance.transfers < ?PEER_GRACE_PERIOD ->
 			newbie;
-		P -> P#performance.bytes / (P#performance.time + 1)
+		P -> (P#performance.bytes_sent + P#performance.bytes_recv) / (P#performance.time + 1)
 	end.
 
 %% @doc Given a set of peers, returns a tuple containing peers that
@@ -122,3 +159,23 @@ roll(Rank, NumPeers) ->
 			(2 * rand:uniform(NumPeers - ?MINIMUM_PEERS)) >=
 				(Rank - ?MINIMUM_PEERS)
 	end.
+
+%% @doc Remove entries from the performance database older than
+%% ?PEER_TMEOUT
+remove_old(Time) ->
+	%PeersToPurge= ets:select(peer_performance, [
+	%	{{'_','$2','$3','_','_','_','_','_'},[{'<','$3',Time - ?PEER_TIMEOUT }],['$2']}]),
+	%ar:report([{ar_manage_peers,add_perf_data}, {peers_to_purge, PeersToPurge}]),
+	ets:select_delete(peer_performance, [
+		{{'_','$2','$3','_','_','_','_','_'},[{'<','$3',Time - ?PEER_TIMEOUT }],[true]}]).
+
+%% @doc Data older than ?PEER_TIMEOUT is removed, newer data is not
+purge_old_peers_test() ->
+	Time = os:system_time(seconds),
+	P1 = #performance{peer={127,0,0,1,1984}, timeout = Time - (?PEER_TIMEOUT + 1)},
+	P2 = #performance{peer={127,0,0,1,1985}, timeout = Time - 1},
+	ets:insert(peer_performance,  P1),
+	ets:insert(peer_performance,  P2),
+	remove_old(Time),
+	?assertEqual([], ets:lookup(peer_performance,{127,0,0,1,1984})),
+	?assertEqual([P2], ets:lookup(peer_performance, {127,0,0,1,1985})).
