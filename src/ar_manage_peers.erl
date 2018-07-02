@@ -36,7 +36,6 @@ get_performance(Peer) ->
 		[P|_] -> P
 	end.
 
-
 %% @doc Print statistics about the current peers.
 stats() ->
 	Connected = ar_bridge:get_remote_peers(http_bridge_node),
@@ -50,6 +49,12 @@ stats(Peers) ->
 		fun(Peer) -> format_stats(Peer, get_performance(Peer)) end,
 		Peers
 	).
+
+%% @doc Update the "last on list" timestamp of a given peer
+update_timer(Peer) ->
+	ets:update_counter(peer_performance, Peer,[
+		{3, 1, 1, os:system_time(seconds)} %timeout - this is tricky we exploit Treshold to apply SetValue.
+		], #performance{peer=Peer}).
 
 %% @doc Reset the performance data for a given peer.
 reset_peer(Peer) ->
@@ -96,7 +101,7 @@ update(Peers) ->
 	lists:foreach(
 		fun(P) ->
 			case lists:member(P, NewPeers) of
-				false -> ar_httpc:update_timer(P);
+				false -> update_timer(P);
 				_ -> ok
 			end
 		end,
