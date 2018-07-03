@@ -54,7 +54,7 @@ start(Node, RawPeers, RawNewB) ->
 
 %% @doc Verify peer(s) are on the same network as the client. Remove any that
 %% are not.
--ifdef(DEBUG).
+-ifdef(TEST).
 filter_peer_list(Peers) when is_list(Peers) ->
 	lists:filter(
 		fun(Peer) when is_pid(Peer) -> true;

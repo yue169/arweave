@@ -8,7 +8,8 @@
 
 %% @doc Specifies whether the software should be run in debug mode
 %% (excuting ifdef code blocks).
-%% WARNING: Only define debug during testing.
+%% WARNING: This define is now obsolete. 
+%% Use make test/make all, of -DTEST/-DNOTEST compile option for test/prod env.
 % -define(DEBUG, debug).
 
 %% @doc Should ar:report_console/1 /actually/ report to the console?

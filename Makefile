@@ -1,9 +1,9 @@
-.DEFAULT_GOAL = test_all
+.DEFAULT_GOAL = all
 
 DIALYZER = dialyzer
 PLT_APPS = erts kernel stdlib sasl inets ssl public_key crypto compiler  mnesia sasl eunit asn1 compiler runtime_tools syntax_tools xmerl edoc tools os_mon
 
-ERL_OPTS= -pa ebin/ \
+ERL_OPTS = -pa ebin/ \
 	-pa lib/prometheus/_build/default/lib/prometheus/ebin \
 	-pa lib/accept/_build/default/lib/accept/ebin \
 	-pa lib/prometheus_process_collector/_build/default/lib/prometheus_process_collector/ebin \
@@ -11,21 +11,25 @@ ERL_OPTS= -pa ebin/ \
 
 test_all: test test_apps
 
-test: all
-	@erl $(ERL_OPTS) -noshell -s ar test_coverage -s init stop
+test: deps
+	erlc -DTEST +export_all -o ebin/ src/ar.erl
+	erl  -DTEST $(ERL_OPTS) -noshell -s ar rebuild -s ar test_coverage -s init stop
 
-test_apps: all
-	@erl $(ERL_OPTS) -noshell -s ar test_apps -s init stop
+test_apps: test
+	@erl -DTEST $(ERL_OPTS) -noshell -s ar test_apps -s init stop
 
-test_networks: all
-	@erl $(ERL_OPTS) -s ar start -s ar test_networks -s init stop
+test_networks: test
+	@erl -DTEST $(ERL_OPTS) -s ar start -s ar test_networks -s init stop
 
 tnt: test
 
 no-vlns: test_networks
 
-realistic: all
-	@erl $(ERL_OPTS) -noshell -s ar start -s ar_test_sup start realistic
+test_session: all
+	erl -DTEST $(ERL_OPTS) -s ar start
+
+realistic: test
+	@erl -DTEST $(ERL_OPTS) -noshell -s ar start -s ar_test_sup start realistic
 
 log:
 	tail -f logs/`ls -t logs |  head -n 1`
@@ -33,7 +37,7 @@ log:
 catlog:
 	cat logs/`ls -t logs | head -n 1`
 
-all: ebin logs blocks
+deps: ebin logs blocks
 	rm -rf priv
 	rm -rf data/mnesia
 	cd lib/jiffy && ./rebar compile && cd ../.. && mv lib/jiffy/priv ./
@@ -42,8 +46,10 @@ all: ebin logs blocks
 	(cd lib/prometheus && ./rebar3 compile)
 	(cd lib/accept && ./rebar3 compile)
 	(cd lib/prometheus_process_collector && ./rebar3 compile && cp _build/default/lib/prometheus_process_collector/priv/*.so ../../priv)
-	erlc +export_all -o ebin/ src/ar.erl
-	erl $(ERL_OPTS) -noshell -s ar rebuild -s init stop
+
+all: deps
+	erlc -DNOTEST +export_all -o ebin/ src/ar.erl
+	erl  -DNOTEST $(ERL_OPTS) -noshell -s ar rebuild -s init stop
 
 ebin:
 	mkdir -p ebin
@@ -59,13 +65,13 @@ docs: all
 	(cd docs && erl -noshell -s ar docs -pa ../ebin -s init stop)
 
 session: all
-	erl $(ERL_OPTS) -s ar start -pa ebin/
+	erl -DNOTEST $(ERL_OPTS) -s ar start
 
-sim_realistic: all
-	erl $(ERL_OPTS) -s ar_network spawn_and_mine realistic
+sim_realistic: test
+	erl -DTEST $(ERL_OPTS) -s ar_network spawn_and_mine realistic
 
-sim_hard: all
-	erl $(ERL_OPTS) -s ar_network spawn_and_mine hard
+sim_hard: test
+	erl -DTEST $(ERL_OPTS) -s ar_network spawn_and_mine hard
 
 clean:
 	rm -rf data/mnesia
@@ -108,6 +114,7 @@ build-plt:
 	--apps $(PLT_APPS)
 
 dialyzer:
-	$(DIALYZER) --fullpath  --src -r ./src -r ./lib/*/src ./lib/pss \
-	-I ./lib/*/include --plt .arweave.plt --no_native \
+	$(DIALYZER) --fullpath --src -r ./src -r ./lib/*/src ./lib/pss -r ./lib/prometheus/src/ \
+	-I ./lib/prometheus/include/ -I ./lib/elli/include/ -I ./lib/accept/include/ -I ./lib/fusco/include/ \
+	--plt .arweave.plt --no_native \
 	-Werror_handling -Wrace_conditions

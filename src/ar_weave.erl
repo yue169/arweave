@@ -13,7 +13,7 @@
 
 %% @doc Start a new block list. Optionally takes a list of wallet values
 %% for the genesis block.
--ifdef(DEBUG).
+-ifdef(TEST).
 init() -> init(ar_util:genesis_wallets()).
 init(WalletList) -> init(WalletList, ?DEFAULT_DIFF, 0).
 init(WalletList, Diff) -> init(WalletList, Diff, 0).
