@@ -76,7 +76,7 @@ sign(TX, PrivKey, PubKey) ->
 %% @doc Verify whether a transaction is valid to be regossiped and mined on.
 %% NB: The signature verification is the last step due to the potential of an attacker
 %% submitting an arbitrary length signature field and having it processed.
--ifdef(DEBUG).
+-ifdef(TEST).
 verify(#tx { signature = <<>> }, _, _) -> true;
 verify(TX, Diff, WalletList) ->
 	% ar:report(
@@ -269,7 +269,7 @@ tags_to_binary(Tags) ->
 
 %% @doc A check if the transactions last_tx field and owner match the expected
 %% value found in the wallet list wallet list, if so returns true else false.
--ifdef(DEBUG).
+-ifdef(TEST).
 check_last_tx([], _) -> true;
 check_last_tx(_WalletList, TX) when TX#tx.owner == <<>> -> true;
 check_last_tx(WalletList, TX) ->

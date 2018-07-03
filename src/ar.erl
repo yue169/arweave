@@ -424,7 +424,7 @@ d(X) ->
 	X.
 
 %% @doc A multiplier applied to all simulated time elements in the system.
--ifdef(DEBUG).
+-ifdef(TEST).
 scale_time(Time) ->
 	erlang:trunc(?DEBUG_TIME_SCALAR * Time).
 -else.

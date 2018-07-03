@@ -70,7 +70,7 @@ invalidate_block(B) ->
 %% @doc Write a block (with the hash.json as the filename) to disk.
 %% When debug is set, does not consider disk space. This is currently
 %% necessary because of test timings
--ifdef(DEBUG).
+-ifdef(TEST).
 write_block(Bs) when is_list(Bs) -> lists:foreach(fun write_block/1, Bs);
 write_block(B) ->
 	BlockToWrite = ar_serialize:jsonify(ar_serialize:block_to_json_struct(B)),
@@ -126,7 +126,7 @@ write_full_block(B) ->
 %% @doc Write an encrypted  block (with the hash.json as the filename) to disk.
 %% When debug is set, does not consider disk space. This is currently
 %% necessary because of test timings
--ifdef(DEBUG).
+-ifdef(TEST).
 write_encrypted_block(Hash, B) ->
 	BlockToWrite = B,
 	file:write_file(
@@ -265,7 +265,7 @@ tx_exists(Hash) ->
 %% @doc Write a tx (with the txid.json as the filename) to disk.
 %% When debug is set, does not consider disk space. This is currently
 %% necessary because of test timings
--ifdef(DEBUG).
+-ifdef(TEST).
 write_tx(Txs) when is_list(Txs) -> lists:foreach(fun write_tx/1, Txs);
 write_tx(Tx) ->
 	file:write_file(

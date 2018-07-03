@@ -1943,7 +1943,7 @@ start_mining(S = #state { hash_list = BHL, txs = TXs, reward_addr = RewardAddr, 
 %% Wait time is a fixed interval combined with a wait dependent on tx data size.
 %% This wait helps ensure that a tx has propogated around the network.
 %% NB: If debug is defined no wait is applied.
--ifdef(DEBUG).
+-ifdef(TEST).
 calculate_delay(0) -> 0;
 calculate_delay(Bytes) -> 0.
 -else.
