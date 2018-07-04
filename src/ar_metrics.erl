@@ -320,15 +320,15 @@ size(Sizes, response) ->
   size(Sizes, response_headers) +
     size(Sizes, response_body);
 size(Sizes, response_headers) ->
-  proplists:get_value(req_body, Sizes);
+  proplists:get_value(req_body, Sizes,0);
 size(Sizes, req_body) ->
-  proplists:get_value(resp_headers, Sizes);
+  proplists:get_value(resp_headers, Sizes,0);
 size(Sizes, response_body) ->
   case proplists:get_value(chunks, Sizes) of
     undefined ->
       case proplists:get_value(file, Sizes) of
         undefined ->
-          proplists:get_value(resp_body, Sizes);
+          proplists:get_value(resp_body, Sizes,0);
         FileSize -> FileSize
       end;
     ChunksSize -> ChunksSize
