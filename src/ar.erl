@@ -57,8 +57,7 @@
 	new_key = false,
 	load_key = false,
 	pause = true,
-	disk_space = ar_storage:calculate_disk_space(),
-	used_space = ar_storage:calculate_used_space(),
+	disk_space = undefined,
 	start_block = undefined
 }).
 
@@ -152,12 +151,19 @@ start(
 		new_key = NewKey,
 		load_key = LoadKey,
 		pause = Pause,
-		disk_space = DiskSpace,
-		used_space = UsedSpace,
+		disk_space = DiskSpace0,
 		start_block = IndepHash
 	}) ->
+	error_logger:logfile({open, Filename = generate_logfile_name()}),
+	application:start(sasl),
+	ar_alarm:start(),
+	application:start(os_mon),
 	% Optionally clear the block cache
 	if Clean -> ar_storage:clear(); true -> do_nothing end,
+	DiskSpace=case DiskSpace0 of
+		undefined -> ar_storage:calculate_disk_space();
+		X -> X
+	end,
 	%register prometheus stats collector,
 	%prometheus collector app is started at cmdline
 	application:ensure_started(prometheus),
@@ -274,7 +280,6 @@ start(
 	% Add self to all remote nodes.
     %lists:foreach(fun ar_http_iface:add_peer/1, Peers),
 	% Start the logging system.
-	error_logger:logfile({open, Filename = generate_logfile_name()}),
 	error_logger:tty(false),
 	PrintMiningAddress = case MiningAddress of
 			unclaimed -> "unclaimed";
