@@ -365,8 +365,6 @@ calculate_used_space() ->
 
 %% @doc Calculate the total amount of disk space available
 calculate_disk_space() ->
-	application:start(sasl),
-	application:start(os_mon),
 	{ok, CWD} = file:get_cwd(),
 	[{_,Size,_}|_] = select_drive(disksup:get_disk_data(), CWD),
 	Size*1024.
