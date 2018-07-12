@@ -30,6 +30,12 @@ init([]) ->
 handle_call(_Req, State) ->
 	{ok, badreq, State}.
 
+handle_event({set_alarm, Alarm={process_memory_high_watermark, Pid}}, Alarms) ->
+	ar:report({ar_alarm, Alarm},
+			  erlang:process_info(Pid)),
+	prometheus_gauge:set(ar_alarms, [process_memory_high_watermark,
+									 erlang:process_info(Pid,initial_call)], 1),
+	{ok, [Alarm | Alarms]};
 handle_event({set_alarm, Alarm={AlarmId, AlarmDescr}}, Alarms) ->
 	%ar:report({set_alarm, Alarm}),
 	prometheus_gauge:set(ar_alarms, [AlarmId, AlarmDescr], 1),
