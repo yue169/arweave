@@ -1,5 +1,5 @@
 -module(ar_node).
--export([start/0, start/1, start/2, start/3, start/4, start/5, start/6, start/7]).
+-export([start/0, start/1, start/2, start/3, start/4, start/5, start/6, start/7, do_start/7]).
 -export([stop/1]).
 -export([get_blocks/1, get_block/2, get_full_block/2]).
 -export([get_tx/2]).
@@ -69,6 +69,7 @@
 	height = 0, % current height of the blockweave
 	gossip, % Gossip protcol state
 	txs = [], % set of new txs to be mined into the next block
+	fork_recovery = undefined, %Pid of fork_recovery server when active
 	miner, % PID of the mining process
 	mining_delay = 0, % delay on mining, used for netework simulation
 	automine = false, % boolean dictating if a node should automine
@@ -183,54 +184,69 @@ start(Peers, Bs = [B | _], MiningDelay, RewardAddr, AutoJoin, Diff, LastRetarget
     );
 start(Peers, HashList, MiningDelay, RewardAddr, AutoJoin, Diff, LastRetarget) ->
     % spawns the node server process
-	PID = spawn(
-		fun() ->
-            % join the node to the network
-			case {HashList, AutoJoin} of
-				{not_joined, true} ->
-					ar_join:start(self(), Peers);
-				_ ->
-					do_nothing
-			end,
-			Gossip =
-				ar_gossip:init(
-					lists:filter(
-						fun is_pid/1,
-						Peers
-					)
-				),
-			Hashes = ar_util:wallets_from_hashes(HashList),
-			Height = ar_util:height_from_hashes(HashList),
-			RewardPool =
-				case HashList of
-					not_joined -> 0;
-					[H | _] -> (ar_storage:read_block(H))#block.reward_pool
-				end,
-			WeaveSize =
-					case HashList of
-						not_joined -> 0;
-						[H2 | _] -> (ar_storage:read_block(H2))#block.weave_size
-					end,
-			server(
-				#state {
-					gossip = Gossip,
-					hash_list = HashList,
-					wallet_list = Hashes,
-					floating_wallet_list = Hashes,
-					mining_delay = MiningDelay,
-					reward_addr = RewardAddr,
-					reward_pool = RewardPool,
-					height = Height,
-					trusted_peers = Peers,
-					diff = Diff,
-					last_retarget = LastRetarget,
-					weave_size = WeaveSize
-				}
-			)
-		end
-    ),
+	PID = spawn(ar_node,do_start,[Peers, HashList, MiningDelay, RewardAddr, AutoJoin, Diff, LastRetarget]),
 	ar_http_iface:reregister(http_entrypoint_node, PID),
 	PID.
+
+do_start(Peers, HashList, MiningDelay, RewardAddr, AutoJoin, Diff, LastRetarget) ->
+	ar:report([
+		{node_start,self()},
+		{peers, Peers},
+		{auto_join,AutoJoin}
+	]),
+    % join the node to the network
+	PID= case {HashList, AutoJoin} of
+		{not_joined, true} ->
+			case ar_fork_recovery:start(self(), Peers, undefined, not_joined) of
+				Pid when is_pid(Pid) ->
+					erlang:monitor(process, Pid ),
+					Pid;
+				{undefined, Msg} ->
+					ar:report({bootup_join_fail,Msg}),
+					undefined;
+				 Msg ->
+					ar:report({bootup_join_fail2,Msg}),
+					undefined
+				end;
+		_ ->
+			undefined
+	end,
+	Gossip =
+		ar_gossip:init(
+			lists:filter(
+				fun is_pid/1,
+				Peers
+			)
+		),
+	Hashes = ar_util:wallets_from_hashes(HashList),
+	Height = ar_util:height_from_hashes(HashList),
+	RewardPool =
+		case HashList of
+			not_joined -> 0;
+			[H | _] -> (ar_storage:read_block(H))#block.reward_pool
+		end,
+	WeaveSize =
+			case HashList of
+				not_joined -> 0;
+				[H2 | _] -> (ar_storage:read_block(H2))#block.weave_size
+			end,
+	server(
+		#state {
+			gossip = Gossip,
+			hash_list = HashList,
+			fork_recovery = PID,
+			wallet_list = Hashes,
+			floating_wallet_list = Hashes,
+			mining_delay = MiningDelay,
+			reward_addr = RewardAddr,
+			reward_pool = RewardPool,
+			height = Height,
+			trusted_peers = Peers,
+			diff = Diff,
+			last_retarget = LastRetarget,
+			weave_size = WeaveSize
+		}
+	).
 
 %% @doc Stop a node server loop and its subprocesses.
 stop(Node) ->
@@ -1105,20 +1121,19 @@ server(
                     end,
                     UntrustedPeers
                 ),
-                ar_join:start(self(), S#state.trusted_peers, Block),
-                server(S);
+                fork_recover(S, S#state.trusted_peers,Block);
             {fork_recovered, NewHs} when HashList == not_joined ->
                 NewB = ar_storage:read_block(hd(NewHs)),
+                PidRef=spawn_opt(ar_join, fill_to_capacity, 
+                    [NewB#block.hash_list],
+                    [monitor, {fullsweep_after, 0}]),
                 ar:report_console(
                     [
                         node_joined_successfully,
-                        {height, NewB#block.height}
+                        {height, NewB#block.height},
+                        {spawning_fill_to_capacity, PidRef}
                     ]
                 ),
-                case whereis(fork_recovery_server) of
-                    undefined -> ok;
-                    _ -> erlang:unregister(fork_recovery_server)
-                end,
                 %ar_cleanup:remove_invalid_blocks(NewHs),
                 TXPool = S#state.txs ++ S#state.potential_txs,
                 TXs =
@@ -1130,6 +1145,7 @@ server(
                 server(
                     reset_miner(
                         S#state {
+                            fork_recovery = undefined,
                             hash_list = NewHs,
                             wallet_list = NewB#block.wallet_list,
                             height = NewB#block.height,
@@ -1145,10 +1161,6 @@ server(
                 );
             {fork_recovered, NewHs}
                     when (length(NewHs)) > (length(HashList)) ->
-                case whereis(fork_recovery_server) of
-                    undefined -> ok;
-                    _ -> erlang:unregister(fork_recovery_server)
-                end,
                 NewB = ar_storage:read_block(hd(NewHs)),
                 ar:report_console(
                     [
@@ -1167,6 +1179,7 @@ server(
                 server(
                     reset_miner(
                         S#state {
+                            fork_recovery = undefined,
                             hash_list =
                                 [NewB#block.indep_hash | NewB#block.hash_list],
                             wallet_list = NewB#block.wallet_list,
@@ -1181,12 +1194,19 @@ server(
                         }
                     )
                 );
-            {fork_recovered, _} -> server(S);
-            {'DOWN', _, _, _, _} ->
-                server(S);
-            Msg ->
-                ar:report_console([{unknown_msg_node, Msg}]),
-                server(S)
+            {fork_recovered, _} -> 
+                ar:report_console([fork_recovered_ignored]),
+                server(S#state {fork_recovery = undefined});
+            {'DOWN',  MonitorRef, Type, Object, Info} ->
+                ar:report_console([
+                    {ar_node,down_msg},
+                    {MonitorRef, Type, Object, Info}
+                ]),
+                FrPid= S#state.fork_recovery,
+                case Object of
+                    FrPid -> server(S#state{fork_recovery=undefined});
+                    _ -> server(S)
+                end
         end)
 	catch
 		throw:Term ->
@@ -1216,33 +1236,35 @@ server(
 
 %% @doc Catch up to the current height.
 join_weave(S, NewB) ->
-	ar_join:start(ar_gossip:peers(S#state.gossip), NewB),
-	server(S).
+	fork_recover(S, ar_gossip:peers(S#state.gossip),NewB).
 
 %% @doc Recovery from a fork.
 fork_recover(
-	S = #state {
-		hash_list = HashList,
-		gossip = _GS
-	}, Peer, NewB) ->
-	case {whereis(fork_recovery_server), whereis(join_server)} of
-		{undefined, undefined} ->
-			erlang:monitor(
-				process,
-				PID = ar_fork_recovery:start(
-					ar_util:unique(Peer),
-					NewB,
-					HashList
-				)
-			),
-			case PID of
-				undefined -> ok;
-				_ -> erlang:register(fork_recovery_server, PID)
-			end;
-		{undefined, _} -> ok;
-		_ ->
-		whereis(fork_recovery_server) ! {update_target_block, NewB, ar_util:unique(Peer)}
+       S= #state{
+               fork_recovery = undefined,
+               hash_list = HashList
+       },  Peer,NewB)  ->
+	PID = case ar_fork_recovery:start(self(),
+						ar_util:unique(Peer),
+						NewB,
+						HashList
+               ) of
+		Pid when is_pid(Pid) -> 
+			erlang:monitor(process, Pid ),
+			Pid;
+		{undefined, Msg} ->
+			ar:report(Msg),
+			undefined;
+		Msg -> 
+			ar:report(Msg),
+			undefined
 	end,
+	server(S#state{fork_recovery=PID});
+fork_recover(
+	S = #state {
+		fork_recovery=Pid
+	}, Peer, NewB) ->
+	Pid ! {update_target_block, NewB, ar_util:unique(Peer)},
 	server(S).
 
 %% @doc Return the sublist of shared starting elements from two lists.
@@ -1252,6 +1274,7 @@ fork_recover(
 
 %% @doc Validate whether a new block is legitimate, then handle it, optionally
 %% dropping or starting a fork recoverer as appropriate.
+
 process_new_block(S, NewGS, NewB, _, _Peer, not_joined) ->
 	join_weave(S#state { gossip = NewGS }, NewB);
 process_new_block(RawS1, NewGS, NewB, unavailable, Peer, HashList)
@@ -1317,7 +1340,7 @@ process_new_block(RawS1, NewGS, NewB, RecallB, Peer, HashList)
 	case validate(NewS, NewB, TXs, ar_util:get_head_block(HashList), RecallB) of
 		true ->
 			% The block is legit. Accept it.
-			case whereis(fork_recovery_server) of
+			case S#state.fork_recovery  of
 				undefined -> integrate_new_block(NewS, NewB);
 				_ -> fork_recover(S#state { gossip = NewGS }, Peer, NewB)
 			end;

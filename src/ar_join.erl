@@ -1,56 +1,34 @@
 -module(ar_join).
--export([start/2, start/3]).
+-export([join/3, fill_to_capacity/1]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %%% Represents a process that handles creating an initial, minimal
 %%% block list to be used by a node joining a network already in progress.
+%%% this code is executed in fork_recovery process context
 
-%% @doc Start a process that will attempt to join a network from the last
-%% sync block.
-start(Peers, NewB) when is_record(NewB, block) ->
-	start(self(), Peers, NewB);
-start(Node, Peers) ->
-	start(Node, Peers, ar_node:get_current_block(Peers)).
-start(Node, Peers, B) when is_atom(B) -> 
-	ar:report_console(
-		[
-			could_not_retrieve_current_block,
-			{trying_again_in, ?REJOIN_TIMEOUT, seconds}
-		]
-	),
-	timer:apply_after(?REJOIN_TIMEOUT, ar_join, start, [Node, Peers]);
-start(_, _, not_found) -> do_nothing;
-start(_, _, unavailable) -> do_nothing;
-start(_, _, no_response) -> do_nothing;
-start(Node, RawPeers, RawNewB) ->
-	case whereis(join_server) of
-		undefined ->
-			PID = spawn(
-				fun() ->
-					Peers = filter_peer_list(RawPeers),
-					NewB = ar_node:get_full_block(Peers, RawNewB#block.indep_hash),
-					join_peers(Peers),
-					case ?IS_BLOCK(NewB) of
-						true ->
-							ar:report_console(
-								[
-									joining_network,
-									{node, Node},
-									{peers, Peers},
-									{height, NewB#block.height}
-								]
-							),
-							get_block_and_trail(Peers, NewB, NewB#block.hash_list),
-							Node ! {fork_recovered, [NewB#block.indep_hash|NewB#block.hash_list]},
-							spawn(fun() -> fill_to_capacity(Peers, NewB#block.hash_list) end);
-						false -> ok
-					end
-				end
+%% @doc Attempt to join a network from the last sync block.
+join(Parent,RawPeers, RawNewB) ->
+	Peers = filter_peer_list(RawPeers),
+	NewB = ar_node:get_full_block(Peers, RawNewB#block.indep_hash),
+	join_peers(Peers),
+	case ?IS_BLOCK(NewB) of
+		true ->
+			ar:report(
+				[
+					{joining_network, self()},
+					{parent, Parent},
+					{peers, Peers},
+					{height, NewB#block.height}
+				]
 			),
-			erlang:register(join_server, PID);
-		_ -> already_running
+			get_block_and_trail(Peers, NewB, NewB#block.hash_list),
+			[NewB#block.indep_hash|NewB#block.hash_list];
+		 false -> not_joined
 	end.
+
+
+
 
 %% @doc Verify peer(s) are on the same network as the client. Remove any that
 %% are not.
@@ -141,46 +119,22 @@ get_block_and_trail(Peers, NewB, BehindCurrent, HashList) ->
 	end.
 
 %% @doc Fills node to capacity based on weave storage limit.
-fill_to_capacity(_, []) -> ok;
-fill_to_capacity(Peers, ToWrite) ->
-	timer:sleep(1000),
-	try
-		RandHash = lists:nth(rand:uniform(length(ToWrite)), ToWrite),
-		case ar_node:get_full_block(Peers, RandHash) of
-			unavailable -> 
-				timer:sleep(3000),
-				fill_to_capacity(Peers, ToWrite);
-			B ->
-				case ar_storage:write_full_block(B) of
-					{error, _} -> disk_full;
-					_ ->
-						fill_to_capacity(
-							Peers,
-							lists:delete(RandHash, ToWrite)
-						)
-				end
-		end
-	catch
-	throw:Term ->
-		ar:report(
-			[
-				{'EXCEPTION', {Term}}
-			]
-		),
-		fill_to_capacity(Peers, ToWrite);
-	exit:Term ->
-		ar:report(
-			[
-				{'EXIT', Term}
-			]
-		);
-	error:Term ->
-		ar:report(
-			[
-				{'EXIT', {Term, erlang:get_stacktrace()}}
-			]
-		),
-		fill_to_capacity(Peers, ToWrite)
+fill_to_capacity([]) -> ok;
+fill_to_capacity(ToWrite) ->
+	timer:sleep(3000),
+	RandHash = lists:nth(rand:uniform(length(ToWrite)), ToWrite),
+	Peers=ar_bridge:get_remote_peers(whereis(http_bridge_node)),
+	Peer= lists:nth(rand:uniform(length(Peers)), Peers),
+	ar:report([{fill_to_capacity,length(ToWrite),Peer,ar_util:encode(RandHash)}]),
+	case ar_node:get_full_block(Peers, RandHash) of
+		unavailable ->
+			timer:sleep(3000),
+			fill_to_capacity(ToWrite);
+		B ->
+			case ar_storage:write_full_block(B) of
+				{error, _} -> disk_full;
+				_ -> fill_to_capacity(lists:delete(RandHash, ToWrite))
+			end
 	end.
 
 %% @doc Check that nodes can join a running network by using the fork recoverer.

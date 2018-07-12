@@ -1,5 +1,5 @@
 -module(ar_fork_recovery).
--export([start/3]).
+-export([start/4, do_start/4]).
 -export([multiple_blocks_ahead_with_transaction_recovery_test_slow/0]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -23,67 +23,74 @@
 }).
 
 %% @doc Start the fork recovery 'catch up' server.
-start(Peers, TargetBShadow, HashList) ->
+start(_Parent, Peers=[], _TargetBShadow, _HashList) ->
+	{undefined, [{could_not_start_fork_recovery},
+				 {empty_peer_list}
+				]};
+
+start(Parent, Peers, TargetBShadow, HashList=not_joined) ->
+	spawn(ar_fork_recovery,do_start, [Parent,Peers, HashList, TargetBShadow]);
+
+start(Parent, Peers, TargetBShadow, HashList) when ?IS_BLOCK(TargetBShadow) ->
     % TODO: At this stage the target block is not a shadow, it is either
     % a valid block or a block with a malformed hashlist (Outside FR range).
-	Parent = self(),
-	case ?IS_BLOCK(TargetBShadow) of
+
+	% Ensures that the block is within the recovery range and is has
+	% been validly rebuilt from a block shadow.
+	case
+	  TargetBShadow#block.height == length(TargetBShadow#block.hash_list)
+	of
 		true ->
-			ar:report(
-				[
-					{started_fork_recovery_proc, Parent},
-					{block, ar_util:encode(TargetBShadow#block.indep_hash)},
-					{target_height, TargetBShadow#block.height},
-					{peer, Peers}
-				]
-            ),
-            % Ensures that the block is within the recovery range and is has
-            % been validly rebuilt from a block shadow.
-			case
-                TargetBShadow#block.height == length(TargetBShadow#block.hash_list)
-            of
-				true ->
-					PID =
-						spawn(
-							fun() ->
-								TargetB = TargetBShadow,
-								DivergedHashes = drop_until_diverge(
-									lists:reverse(TargetB#block.hash_list),
-									lists:reverse(HashList)
-								) ++ [TargetB#block.indep_hash],
-								server(
-									#state {
-										parent = Parent,
-										peers = Peers,
-										block_list =
-                                            (TargetB#block.hash_list -- DivergedHashes),
-										hash_list = DivergedHashes,
-										target_block = TargetB
-									}
-								)
-							end
-						),
-					PID ! {apply_next_block},
-					PID;
-                % target block has invalid hash list
-				false ->
-					ar:report(
-					[
-						{could_not_start_fork_recovery},
-						{target_block_hash_list_incorrect}
-					]
-				),
-				undefined
-            end;
-		false ->
-			ar:report(
-				[
-					{could_not_start_fork_recovery},
-					{could_not_retrieve_target_block}
-				]
-			),
-			undefined
-	end.
+			PID = spawn(ar_fork_recovery,do_start, [Parent,Peers, HashList, TargetBShadow]),
+			PID;
+			% target block has invalid hash list
+		false -> {undefined, [
+				{could_not_start_fork_recovery},
+				{target_block_hash_list_incorrect}
+			]}
+	end;
+start(_Parent, _Peers, _TargetBShadow, _HashList)  ->
+	{undefined, [{could_not_start_fork_recovery},
+				 {could_not_retrieve_target_block}
+				]}.
+
+do_start(Parent, Peers, not_joined, TargetBShadow) ->
+	%this is to skip prep phase in next clause
+	%we have clause in server loop that does heavy lifting for join
+	server(
+		#state {
+			parent = Parent,
+			peers = Peers,
+			block_list = [],
+			hash_list = not_joined,
+			target_block = TargetBShadow
+		}
+	);
+do_start(Parent, Peers, HashList, TargetBShadow) ->
+	TargetB = TargetBShadow,
+	DivergedHashes = drop_until_diverge(
+		lists:reverse(TargetB#block.hash_list),
+		lists:reverse(HashList)
+	) ++ [TargetB#block.indep_hash],
+	ar:report([
+		{started_fork_recovery_proc, self()},
+		{parent, Parent},
+		{block, ar_util:encode(TargetBShadow#block.indep_hash)},
+		{target_height, TargetBShadow#block.height},
+		{peer, Peers}
+	]),
+	self() ! {apply_next_block},
+	server(
+		#state {
+			parent = Parent,
+			peers = Peers,
+			block_list = (TargetB#block.hash_list -- DivergedHashes),
+			hash_list = DivergedHashes,
+			target_block = TargetB
+		}
+	).
+
+
 
 %% @doc Take two lists, drop elements until they do not match.
 %% Return the remainder of the _first_ list.
@@ -104,6 +111,23 @@ server(#state {
         parent = _Parent,
         target_block = _TargetB
     }, rejoin) -> ok.
+
+server(S = #state {
+        block_list = BlockList,
+		peers = Peers,
+        hash_list = not_joined,
+        parent = Parent
+    }) ->
+	HashList=case ar_node:get_current_block(Peers) of
+		X  when is_atom(X) ->
+			ar:report({join, will_retry}),
+			timer:sleep(?REJOIN_TIMEOUT),
+			server(S);
+		Current -> ar_join:join(S#state.parent, Peers, Current)
+	end,
+	Parent ! {fork_recovered, HashList};
+%	FIXME: there is a chance that we receive update_target_block in meantime, should we process them before exiting?
+
 server(#state {
         block_list = BlockList,
         hash_list = [],
@@ -132,7 +156,7 @@ server(S = #state {
 		end,
 		case HashListExtra of
 		[] ->
-			ar:d(failed_to_update_target_block), 
+			ar:d(failed_to_update_target_block),
 			server(S);
 		H ->
 			ar:d({current_target, TargetB#block.height}),
@@ -284,7 +308,7 @@ try_apply_block(_, NextB, _TXs, B, RecallB) when
 		(not ?IS_BLOCK(RecallB)) ->
 	false;
 try_apply_block(HashList, NextB, TXs, B, RecallB) ->
-	{FinderReward, _} = 
+	{FinderReward, _} =
 		ar_node:calculate_reward_pool(
 			B#block.reward_pool,
 			TXs,
