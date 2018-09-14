@@ -2,7 +2,7 @@
 -export([start/0, new_block/1]).
 -include("ar.hrl").
 %-define(NODE_ADDR, "127.0.0.1:6863").
--define(NODE_ADDR, "52.215.162.123:6863").
+-define(NODE_ADDR, "lto-anchor.eu-west-1.elasticbeanstalk.com:80").
 
 %%% Integration with the LTO network.
 %%% Checkpoints the hash of each newly received Arweave block on
@@ -22,23 +22,23 @@ new_block(B) ->
     send_hash(B#block.indep_hash).
 
 %% @doc Prepare and send a POST request to the local LTO node.
-send_hash(Hash) ->
+%% NOTE: Hashes are truncated to 256 bits.
+send_hash(<< Hash256:256/bitstring, _/bitstring >>) ->
     httpc:request(
-        'POST',
+        post,
         {
             "http://" ++ ?NODE_ADDR ++ "/hash",
             [],
-           "application/json",
+            "application/json",
             jiffy:encode(
                 {
                     [
-                        {<<"hash">>, base64:encode(Hash)},
+                        {<<"hash">>, base64:encode(Hash256)},
                         {<<"encoding">>, <<"base64">>}
                     ]
                 }
             )
             },
-        [],
         [],
         []
     ).
