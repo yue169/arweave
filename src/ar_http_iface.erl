@@ -763,26 +763,12 @@ send_new_block(Peer, Port, NewB, RecallB) ->
 			true ->  RecallB#block.indep_hash;
 			false -> <<>>
 		end,
-	case ar_key_db:get(RecallBHash) of
-		[{Key, Nonce}] ->
-			send_new_block(
-				Peer,
-				Port,
-				NewB,
-				RecallB,
-				Key,
-				Nonce
-			);
-		_ ->
-			send_new_block(
-				Peer,
-				Port,
-				NewB,
-				RecallB,
-				<<>>,
-				<<>>
-			)
-	end.
+	{Key, Nonce} =
+		case ar_key_db:get(RecallBHash) of
+			[{Key, Nonce}] -> {Key, Nonce};
+			_              -> {<<>>, <<>>}
+		end,
+	send_new_block(Peer, Port, NewB, RecallB, Key, Nonce);
 send_new_block(Peer, Port, NewB, RecallB, Key, Nonce) ->
 	RecallBHash =
 		case ?IS_BLOCK(RecallB) of
