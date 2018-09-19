@@ -765,10 +765,10 @@ send_new_block(Peer, Port, NewB, RecallB) ->
 		end,
 	{Key, Nonce} =
 		case ar_key_db:get(RecallBHash) of
-			[{Key, Nonce}] -> {Key, Nonce};
-			_              -> {<<>>, <<>>}
+			[{K, N}] -> {K, N};
+			_        -> {<<>>, <<>>}
 		end,
-	send_new_block(Peer, Port, NewB, RecallB, Key, Nonce);
+	send_new_block(Peer, Port, NewB, RecallB, Key, Nonce).
 send_new_block(Peer, Port, NewB, RecallB, Key, Nonce) ->
 	RecallBHash =
 		case ?IS_BLOCK(RecallB) of
