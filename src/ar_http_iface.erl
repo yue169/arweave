@@ -1289,12 +1289,10 @@ verify_all([H|T], Context) ->
 -spec verify_one({mfargs(), httptup()}, list()) -> ok | {error, httptup()}.
 verify_one({{M,F,As, no_context}, ErrorResponse}, _Context) ->
 	verify_one({{M,F,As}, ErrorResponse}, []);
-verify_one({{M,F,As}, ErrorResponse}, Context) ->
-	verified(erlang:apply(M, F, As ++ Context), ErrorResponse);
 verify_one({M,F,As}, Context) ->
 	verified(erlang:apply(M, F, As ++ Context));
-verify_one({Fun, ErrorResponse}, Context) ->
-	verified(erlang:apply(Fun, Context), ErrorResponse).
+verify_one({{M,F,As}, ErrorResponse}, Context) ->
+	verified(erlang:apply(M, F, As ++ Context), ErrorResponse).
 
 %% @doc Homogenises responses from verifier functions.  First argument is the
 %% expected response from the verifier function; second argument is the http
