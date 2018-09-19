@@ -8,7 +8,7 @@
 -export([get_current_block/1]).
 -export([reregister/1, reregister/2]).
 -export([get_txs_by_send_recv_test_slow/0, get_full_block_by_hash_test_slow/0]).
--export([verify_request_to_blockshadow/1]). %% exported for verifier
+-export([verify_request_to_context/2, verify_ignored/2, verify_timestamp/2]). %% exported for verifier
 -include("ar.hrl").
 -include_lib("lib/elli/include/elli.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -194,7 +194,12 @@ handle('GET', [<<"tx">>, Hash, << "data.", _/binary >>], _Req) ->
 %% @doc Share a new block to a peer.
 %% POST request to endpoint /block with the body of the request being a JSON encoded block as specified in ar_serialize.
 handle('POST', [<<"block">>], Req) ->
-	post_block(request, Req);
+	case validate_request(post_block, Req) of
+		{error, ErrorResponse} ->
+			ErrorResponse;
+		{ok, Values} ->
+			process_request(post_block, Values)
+	end;
 
 %% @doc Share a new transaction with a peer.
 %% POST request to endpoint /tx with the body of the request being a JSON encoded tx as specified in ar_serialize.
@@ -1251,47 +1256,103 @@ val_for_key(K, L) ->
 	{K, V} = lists:keyfind(K, 1, L),
 	V.
 
-%% @doc Handle multiple steps of POST /block. First argument is a subcommand,
-%% second the argument for that subcommand.
-post_block(request, Req) ->
+%% @doc Validates a request.  The checks are basically MFAs (see verify_one/2
+%% for details).  Some checks are verify functions specially created in this module,
+%% some are extant functions from around the codebase.
+validate_request(post_block, Req) ->
+	Context = [Req],
+	Checks = [
+		{{ar_node, is_joined, [whereis(http_entrypoint_node)], no_context},
+			{503, [], <<"Not joined.">>}},
+		{{ar_http_iface, verify_request_to_context, [post_block]},
+			{400, [], <<"Invalid block.">>}},
+		{ar_http_iface, verify_ignored, [post_block]},
+		{{ar_http_iface, verify_timestamp, [post_block]},
+			{404, [], <<"Invalid block.">>}}
+	],
+	verify_all(Checks, Context).
+
+%% @doc Lazily runs a list of bool-returning MFAs; returns after first error.
+%% Context is list of arguments required by multiple verifiers.
+verify_all([], Context) -> {ok, Context};
+verify_all([H|T], Context) ->
+	case verify_one(H, Context) of
+		{error, Response} -> {error, Response};
+		{ok, []}          -> verify_all(T, Context);
+		{ok, NewContext}  -> verify_all(T, NewContext)
+	end.
+
+%% @doc Runs a bool-returning MFA, appending a context to the MFA args list.
+%% Returns {ok, NewContext} or {error, Response}.
+-type mfargs() :: {module(), atom(), list()}.
+-type httptup() :: tuple().
+-spec verify_one({mfargs(), httptup()}, list()) -> ok | {error, httptup()}.
+verify_one({{M,F,As, no_context}, ErrorResponse}, _Context) ->
+	verify_one({{M,F,As}, ErrorResponse}, []);
+verify_one({{M,F,As}, ErrorResponse}, Context) ->
+	verified(erlang:apply(M, F, As ++ Context), ErrorResponse);
+verify_one({M,F,As}, Context) ->
+	verified(erlang:apply(M, F, As ++ Context));
+verify_one({Fun, ErrorResponse}, Context) ->
+	verified(erlang:apply(Fun, Context), ErrorResponse).
+
+%% @doc Homogenises responses from verifier functions.  First argument is the
+%% expected response from the verifier function; second argument is the http
+%% error response tuple.
+verified(X)                    -> X.
+verified(true, _)              -> {ok, []};
+verified({ok, Values}, _)      -> {ok, Values};
+verified(error, ErrorResponse) -> {error, ErrorResponse};
+verified(false, ErrorResponse) -> {error, ErrorResponse};
+verified(_, _) ->
+	{error, {<<"500">>, [], <<"Unhandled error.">>}}.
+
+%% @doc Wrapper applying block or tx POSTs to verify_ignored_check
+verify_ignored(post_block, Context = [_ReqStruct, BShadow, _OrigPeer]) ->
+	verify_ignored_check(
+		BShadow#block.indep_hash,
+		<<"Block already processed.">>, Context);
+verify_ignored(post_tx, Context = [_ReqStruct, TX]) ->
+	verify_ignored_check(
+		TX#tx.id,
+		<<"Transaction already processed.">>, Context).
+
+%% @doc ensures ignored status of ID in bridge database
+verify_ignored_check(ID, ErrorMsg, Context) ->
+	case ar_bridge:is_id_ignored(ID) of
+		undefined ->
+			{error, {429, <<"Too many requests.">>}};
+		true ->
+			{error, {208, ErrorMsg}};
+		false ->
+			ar_bridge:ignore_id(ID),
+			{ok, Context}
+	end.
+
+%% @doc Converts an elli request object into data needed for further validation
+%% and processing of the request.  First argument is a name for the request endpoint.
+verify_request_to_context(post_block, Req) ->
 	% Convert request to struct and block shadow.
 	case request_to_struct_with_blockshadow(Req) of
-		{error, {_, _}} ->
-			{400, [], <<"Invalid block.">>};
+		{error, _} ->
+			false;
 		{ok, {ReqStruct, BShadow}} ->
 			Port = val_for_key(<<"port">>, ReqStruct),
 			Peer = bitstring_to_list(elli_request:peer(Req)) ++ ":" ++ integer_to_list(Port),
 			OrigPeer = ar_util:parse_peer(Peer),
-			post_block(check_is_ignored, {ReqStruct, BShadow, OrigPeer})
-	end;
-post_block(check_is_ignored, {ReqStruct, BShadow, OrigPeer}) ->
-	% Check if block is already known.
-	case ar_bridge:is_id_ignored(BShadow#block.indep_hash) of
-		undefined ->
-			{429, <<"Too many requests.">>};
-		true ->
-			{208, <<"Block already processed.">>};
-		false ->
-			ar_bridge:ignore_id(BShadow#block.indep_hash),
-			post_block(check_is_joined, {ReqStruct, BShadow, OrigPeer})
-	end;
-post_block(check_is_joined, {ReqStruct, BShadow, OrigPeer}) ->
-	% Check if node is joined.
-	case ar_node:is_joined(whereis(http_entrypoint_node)) of
-		false ->
-			{503, [], <<"Not joined.">>};
-		true ->
-			post_block(check_timestamp, {ReqStruct, BShadow, OrigPeer})
-	end;
-post_block(check_timestamp, {ReqStruct, BShadow, OrigPeer}) ->
-	% Verify the timestamp of the block shadow.
+			{ok, [ReqStruct, BShadow, OrigPeer]}
+	end.
+
+%% @doc Verifier for timestamps in request data.
+verify_timestamp(post_block, Context = [_ReqStruct, BShadow, _OrigPeer]) ->
 	case ar_block:verify_timestamp(os:system_time(seconds), BShadow) of
-		false ->
-			{404, [], <<"Invalid block.">>};
-		true ->
-			post_block(post_block, {ReqStruct, BShadow, OrigPeer})
-	end;
-post_block(post_block, {ReqStruct, BShadow, OrigPeer}) ->
+		true  -> {ok, Context};
+		false -> false
+	end.
+
+%% @doc After request has been fully validated, returning all required data,
+%% request can now be processed.
+process_request(post_block, [ReqStruct, BShadow, OrigPeer]) ->
 	% Everything fine, post block.
 	spawn(
 		fun() ->
@@ -1330,14 +1391,6 @@ post_block(post_block, {ReqStruct, BShadow, OrigPeer}) ->
 		end
 	),
 	{200, [], <<"OK">>}.
-
-%% @doc Get struct and block shadow out of a request.
-verify_request_to_blockshadow(Req) ->
-	try request_to_struct_with_blockshadow(Req) of
-		{Struct, BShadow} -> {ok, [Struct, BShadow]}
-	catch
-		_:_ -> false
-	end.
 
 %%%
 %%% Tests.
