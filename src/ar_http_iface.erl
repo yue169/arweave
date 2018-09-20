@@ -1321,46 +1321,22 @@ verify_timestamp(post_block, Context = [_ReqStruct, BShadow, _OrigPeer]) ->
 	end.
 
 %% @doc After request has been fully validated, returning all required data,
-%% request can now be processed.
+%% request can now be sent to erlang api to be processed.
 process_request(post_block, [ReqStruct, BShadow, OrigPeer]) ->
-	% Everything fine, post block.
-	spawn(
-		fun() ->
-			JSONRecallB = val_for_key(<<"recall_block">>, ReqStruct),
-			RecallSize = val_for_key(<<"recall_size">>, ReqStruct),
-			KeyEnc = val_for_key(<<"key">>, ReqStruct),
-			NonceEnc = val_for_key(<<"nonce">>, ReqStruct),
-			Key = ar_util:decode(KeyEnc),
-			Nonce = ar_util:decode(NonceEnc),
-			CurrentB = ar_node:get_current_block(whereis(http_entrypoint_node)),
-			B = ar_block:generate_block_from_shadow(BShadow, RecallSize),
-			RecallHash = ar_util:decode(JSONRecallB),
-			case (not is_atom(CurrentB)) andalso
-				(B#block.height > CurrentB#block.height) andalso
-				(B#block.height =< (CurrentB#block.height + 50)) andalso
-				(B#block.diff >= ?MIN_DIFF) of
-				true ->
-					ar:report(
-						[
-							{sending_external_block_to_bridge, ar_util:encode(BShadow#block.indep_hash)}
-						]
-					),
-					RecallB =
-						ar_block:get_recall_block(
-							OrigPeer,
-							RecallHash,
-							B,
-							Key,
-							Nonce,
-							CurrentB#block.hash_list
-						),
-					ar_bridge:add_block(whereis(http_bridge_node), OrigPeer, B, RecallB, Key, Nonce);
-				_ ->
-					ok
-			end
-		end
-	),
-	{200, [], <<"OK">>}.
+	JSONRecallB = val_for_key(<<"recall_block">>, ReqStruct),
+	RecallSize = val_for_key(<<"recall_size">>, ReqStruct),
+	KeyEnc = val_for_key(<<"key">>, ReqStruct),
+	NonceEnc = val_for_key(<<"nonce">>, ReqStruct),
+	Key = ar_util:decode(KeyEnc),
+	Nonce = ar_util:decode(NonceEnc),
+	RecallHash = ar_util:decode(JSONRecallB),
+
+	case ar_api:receive_new_block(
+			BShadow, RecallSize, OrigPeer, RecallHash, Key, Nonce)
+	of
+		ok -> {200, [], <<"OK">>};
+		_  -> {500, [], <<"NOT OK">>}
+	end.
 
 %%%
 %%% Tests.
