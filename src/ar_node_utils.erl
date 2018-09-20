@@ -476,13 +476,14 @@ validate(
 		RewardAddr,
 		Tags) ->
 	% TODO: Fix names.
-	Mine = ar_mine:validate(ar_block:generate_block_data_segment(OldB, RecallB, TXs, RewardAddr, Timestamp, Tags), Nonce, Diff),
+	BDS = ar_block:generate_block_data_segment(OldB, RecallB, TXs, RewardAddr, Timestamp, Tags),
+	Mine = ar_mine:validate(BDS, Nonce, Diff),
 	Wallet = validate_wallet_list(WalletList),
 	IndepRecall = ar_weave:verify_indep(RecallB, HashList),
 	Txs = ar_tx:verify_txs(TXs, Diff, OldB#block.wallet_list),
 	Retarget = ar_retarget:validate(NewB, OldB),
 	IndepHash = ar_block:verify_indep_hash(NewB),
-	Hash = ar_block:verify_dep_hash(NewB, OldB, RecallB, TXs),
+	Hash = ar_block:verify_dep_hash(NewB, BDS),
 	WeaveSize = ar_block:verify_weave_size(NewB, OldB, TXs),
 	Size = ar_block:block_field_size_limit(NewB),
 	%Time = ar_block:verify_timestamp(OldB, NewB),
@@ -554,8 +555,8 @@ validate(
 		andalso PreviousBCheck
 		andalso HashlistCheck
 		andalso WalletListCheck;
-validate(_HL, WL, NewB = #block { hash_list = undefined }, TXs, OldB, RecallB, _, _) ->
-	validate(undefined, WL, NewB, TXs, OldB, RecallB, unclaimed, []);
+validate(_HL, WL, NewB = #block { hash_list = unset }, TXs, OldB, RecallB, _, _) ->
+	validate(unset, WL, NewB, TXs, OldB, RecallB, unclaimed, []);
 validate(HL, _WL, NewB = #block { wallet_list = undefined }, TXs,OldB, RecallB, _, _) ->
 	validate(HL, undefined, NewB, TXs, OldB, RecallB, unclaimed, []);
 validate(_HL, _WL, _NewB, _TXs, _OldB, _RecallB, _, _) ->

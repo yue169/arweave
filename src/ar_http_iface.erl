@@ -1,4 +1,5 @@
 -module(ar_http_iface).
+
 -export([start/0, start/1, start/2, start/3, start/4, start/5, handle/2, handle_event/3]).
 -export([send_new_block/3, send_new_block/4, send_new_block/6, send_new_tx/2, get_block/3]).
 -export([get_tx/2, get_full_block/3, get_block_subfield/3, add_peer/1]).
@@ -9,9 +10,11 @@
 -export([reregister/1, reregister/2]).
 -export([get_txs_by_send_recv_test_slow/0, get_full_block_by_hash_test_slow/0]).
 -export([verify_request_to_context/2, verify_ignored/2, verify_timestamp/2]). %% exported for verifier
+
 -include("ar.hrl").
 -include_lib("lib/elli/include/elli.hrl").
 -include_lib("eunit/include/eunit.hrl").
+
 
 %%% Exposes access to an internal Arweave client to external nodes on the network.
 
@@ -428,31 +431,33 @@ handle('GET', [<<"block">>, Type, ID], Req) ->
 	case Filename of
 		unavailable ->
 			{404, [], <<"Block not found.">>};
-		Filename  ->
+		_  ->
 			case elli_request:get_header(<<"X-Version">>, Req, <<"7">>) of
-				<<"7">> ->
-					B =
-						ar_storage:do_read_block(
-							Filename,
-							ar_node:get_hash_list(whereis(http_entrypoint_node))
-						),
-					{JSONStruct} = ar_serialize:full_block_to_json_struct(B),
-					{200, [],
-						ar_serialize:jsonify(
-							{
-								[
-									{
-										<<"hash_list">>,
-										ar_serialize:hash_list_to_json_struct(B#block.hash_list)
-									}
-								|
-									JSONStruct
-								]
-							}
-						)
-					};
 				<<"8">> ->
-					{ok, [], {file, Filename}}
+					{ok, [], {file, Filename}};
+				<<"7">> ->
+					% Supprt for legacy nodes (pre-1.5).
+					BHL = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+					try ar_storage:do_read_block(Filename, BHL) of
+						B ->
+							{JSONStruct} = ar_serialize:full_block_to_json_struct(B),
+							{200, [],
+								ar_serialize:jsonify(
+									{
+										[
+											{
+												<<"hash_list">>,
+												ar_serialize:hash_list_to_json_struct(B#block.hash_list)
+											}
+										|
+											JSONStruct
+										]
+									}
+								)
+							}
+					catch error:cannot_generate_block_hash_list ->
+						{404, [], <<"Requested block not found on block hash list.">>}
+					end
 			end
 	end;
 

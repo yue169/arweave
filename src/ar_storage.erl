@@ -17,10 +17,7 @@
 
 %%% Reads and writes blocks from disk.
 
-%% Where should the blocks be stored?
--define(BLOCK_DIR, "blocks").
--define(BLOCK_ENC_DIR, "blocks/enc").
--define(TX_DIR, "txs").
+
 -define(DIRECTORY_SIZE_TIMER, 300000).
 
 %% @doc Ensure that all of the relevant storage directories exist.
@@ -228,7 +225,7 @@ do_read_block(Filename, BHL) ->
 							ar:report(
 								[
 									{
-										error_reading_wallet_list_from_disk, 
+										error_reading_wallet_list_from_disk,
 										ar_util:encode(B#block.indep_hash)
 									},
 									{type, Type}
