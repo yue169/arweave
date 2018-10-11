@@ -360,63 +360,49 @@ process_new_block(#{ height := Height } = StateIn, NewGS, NewB, unavailable, Pee
 			ar:report(failed_to_get_recall_block),
 			none
 	end;
-process_new_block(#{ height := Height } = StateIn, NewGS, NewB, RecallB, Peer, HashList)
+process_new_block(
+			#{ height := Height,
+			   reward_pool := RewardPool,
+			   wallet_list := WalletList } = StateIn,
+			NewGS, NewB, RecallB, Peer, HashList)
 		when NewB#block.height == Height + 1 ->
 	% This block is at the correct height.
-	StateNext = StateIn#{ gossip => NewGS },
-	#{
-		reward_pool := RewardPool,
-		wallet_list := WalletList
-	} = StateNext,
 	% If transaction not found in state or storage, txlist built will be
 	% incomplete and will fail in validate
+	AggregatedTXs = aggregate_txs(StateIn),
 	TXs = lists:foldr(
 		fun(T, Acc) ->
-			case [ TX || TX <- aggregate_txs(StateNext), TX#tx.id == T ] of
+			case [ TX || TX <- AggregatedTXs, TX#tx.id == T ] of
 				[] ->
 					case ar_storage:read_tx(T) of
 						unavailable -> Acc;
-						TX			-> [TX | Acc]
+						TX          -> [TX | Acc]
 					end;
-				[TX | _] ->
-					[TX | Acc]
+				[TX | _] -> [TX | Acc]
 			end
 		end,
 		[],
 		NewB#block.txs
 	),
-	{FinderReward, _} =
-		ar_node_utils:calculate_reward_pool(
-			RewardPool,
-			TXs,
-			NewB#block.reward_addr,
-			ar_node_utils:calculate_proportion(
-				RecallB#block.block_size,
-				NewB#block.weave_size,
-				NewB#block.height
-			)
-		),
-	NewWalletList =
-		ar_node_utils:apply_mining_reward(
-			ar_node_utils:apply_txs(WalletList, TXs),
-			NewB#block.reward_addr,
-			FinderReward,
-			NewB#block.height
-		),
+	NewWalletList = ar_node_utils:make_new_wallet_list(
+		NewB, RecallB, TXs, RewardPool, WalletList),
+	StateNext = StateIn#{ gossip => NewGS },
 	StateNew = StateNext#{ wallet_list => NewWalletList },
-	% TODO mue: Setting the state gossip for fork_recover/3 has to be
-	% checked. The gossip is already set to NewGS in first function
-	% statement. Compare to pre-refactoring.
-	StateOut = case ar_node_utils:validate(StateNew, NewB, TXs, ar_util:get_head_block(HashList), RecallB) of
+	% TODO mue: Setting the state gossip for fork_recover/3 has to be checked.
+	% The gossip is already set to NewGS in first function statement.
+	% Compare to pre-refactoring.
+	StateOut = case ar_node_utils:validate(
+						StateNew, NewB, TXs,
+						ar_util:get_head_block(HashList), RecallB) of
 		true ->
 			% The block is legit. Accept it.
 			case whereis(fork_recovery_server) of
 				undefined -> ar_node_utils:integrate_new_block(StateNew, NewB);
-				_		  -> ar_node_utils:fork_recover(StateNext#{ gossip => NewGS }, Peer, NewB)
+				_		  -> ar_node_utils:fork_recover(StateNext, Peer, NewB)
 			end;
 		false ->
 			ar:report([{could_not_validate_new_block, ar_util:encode(NewB#block.indep_hash)}]),
-			ar_node_utils:fork_recover(StateNext#{ gossip => NewGS }, Peer, NewB)
+			ar_node_utils:fork_recover(StateNext, Peer, NewB)
 	end,
 	{ok, StateOut};
 process_new_block(#{ height := Height }, NewGS, NewB, _RecallB, _Peer, _HashList)

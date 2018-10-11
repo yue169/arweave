@@ -8,6 +8,7 @@
 -export([find_recall_hash/2, find_recall_block/1, find_block/1]).
 -export([calculate_reward/2, calculate_reward_pool/4, calculate_proportion/3]).
 -export([apply_mining_reward/4, apply_tx/2, apply_txs/2]).
+-export([make_new_wallet_list/5]).
 -export([start_mining/1, reset_miner/1]).
 -export([integrate_new_block/2]).
 -export([fork_recover/3]).
@@ -173,6 +174,24 @@ apply_txs(WalletList, TXs) ->
 			WalletList,
 			TXs
 		)
+	).
+
+make_new_wallet_list(NewB, RecallB, TXs, RewardPool, WalletList) ->
+	{FinderReward, _} = calculate_reward_pool(
+		RewardPool,
+		TXs,
+		NewB#block.reward_addr,
+		calculate_proportion(
+			RecallB#block.block_size,
+			NewB#block.weave_size,
+			NewB#block.height
+		)
+	),
+	apply_mining_reward(
+		apply_txs(WalletList, TXs),
+		NewB#block.reward_addr,
+		FinderReward,
+		NewB#block.height
 	).
 
 %% @doc Force a node to start mining, update state.
