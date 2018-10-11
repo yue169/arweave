@@ -338,7 +338,7 @@ maybe_remove_tx(TXs, TXID, Sig) ->
 
 %% @doc Validate whether a new block is legitimate, then handle it, optionally
 %% dropping or starting a fork recoverer as appropriate.
-process_new_block(_StateIn, NewGS, NewB, _, _Peer, not_joined) ->
+process_new_block(_StateIn, NewGS, _NewB, _, _Peer, not_joined) ->
 	ar_join:start(ar_gossip:peers(NewGS)),
 	none;
 process_new_block(#{ height := Height } = StateIn, NewGS, NewB, unavailable, Peer, HashList)
@@ -361,9 +361,10 @@ process_new_block(#{ height := Height } = StateIn, NewGS, NewB, unavailable, Pee
 			none
 	end;
 process_new_block(
-			#{ height := Height,
-			   reward_pool := RewardPool,
-			   wallet_list := WalletList } = StateIn,
+			#{ 	height := Height,
+				reward_pool := RewardPool,
+				hash_list   := HashListExpected,
+				wallet_list := WalletList } = StateIn,
 			NewGS, NewB, RecallB, Peer, HashList)
 		when NewB#block.height == Height + 1 ->
 	% This block is at the correct height.
@@ -384,15 +385,15 @@ process_new_block(
 		[],
 		NewB#block.txs
 	),
-	NewWalletList = ar_node_utils:make_new_wallet_list(
+	WalletListExpected = ar_node_utils:make_new_wallet_list(
 		NewB, RecallB, TXs, RewardPool, WalletList),
 	StateNext = StateIn#{ gossip => NewGS },
-	StateNew = StateNext#{ wallet_list => NewWalletList },
+	StateNew = StateNext#{ wallet_list => WalletListExpected },
 	% TODO mue: Setting the state gossip for fork_recover/3 has to be checked.
 	% The gossip is already set to NewGS in first function statement.
 	% Compare to pre-refactoring.
-	StateOut = case ar_node_utils:validate(
-						StateNew, NewB, TXs,
+	StateOut = case ar_node_utils:validate(NewB, TXs,
+						HashListExpected, WalletListExpected,
 						ar_util:get_head_block(HashList), RecallB) of
 		true ->
 			% The block is legit. Accept it.
@@ -491,9 +492,9 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 		HashList, MinedTXs, HashList, RewardAddr, RewardPool,
 		WalletList, Tags, RecallB, Diff, Nonce, Timestamp),
 	case ar_node_utils:validate(
-			StateNew,
 			NextB,
 			MinedTXs,
+			HashList, WalletList,
 			ar_util:get_head_block(HashList),
 			RecallB = ar_node_utils:find_recall_block(HashList)) of
 		false ->

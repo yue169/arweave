@@ -13,12 +13,12 @@
 %%% Tests.
 %%%
 
-%% @doc ensure make_new_wallet_list makes a wallet list to match the new block.
-make_new_wallet_list_ok() ->
-	WL0 = OldB#block.wallet_list,
-	WL1 = NewB#block.wallet_list,
-	WL2 = make_new_wallet_list(NewB, RecallB, TXs, RewardPool, WL0),
-	?assertEqual(WL1, WL2).
+%%% @doc ensure make_new_wallet_list makes a wallet list to match the new block.
+%make_new_wallet_list_ok() ->
+%	WL0 = OldB#block.wallet_list,
+%	WL1 = NewB#block.wallet_list,
+%	WL2 = make_new_wallet_list(NewB, RecallB, TXs, RewardPool, WL0),
+%	?assertEqual(WL1, WL2).
 
 %% @doc Ensure that nodes will not re-gossip txs more than once.
 single_tx_regossip_test() ->

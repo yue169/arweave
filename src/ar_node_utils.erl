@@ -488,7 +488,6 @@ validate(
 		NewB =
 			#block {
 				hash_list = HashList,
-				wallet_list = WalletList,
 				nonce = Nonce,
 				diff = Diff,
 				timestamp = Timestamp
@@ -531,7 +530,6 @@ validate(
 			{block_validation_results, ar_util:encode(NewB#block.indep_hash)},
 			{height, NewB#block.height},
 			{block_mine_validate, Mine},
-			{block_wallet_validate, Wallet},
 			{block_indep_validate, IndepRecall},
 			{block_txs_validate, Txs},
 			{block_diff_validate, Retarget},
@@ -561,7 +559,6 @@ validate(
 	end,
 
 	case Mine of false -> ar:d(invalid_nonce); _ -> ok end,
-	case Wallet of false -> ar:d(invalid_wallet_list); _ -> ok	end,
 	case Txs of false -> ar:d(invalid_txs); _ -> ok  end,
 	case Retarget of false -> ar:d(invalid_difficulty); _ -> ok  end,
 	case IndepHash of false -> ar:d(invalid_indep_hash); _ -> ok  end,
@@ -575,7 +572,6 @@ validate(
 	case WalletListCheck of false -> ar:d(invalid_wallet_list_rewards); _ -> ok  end,
 
 	(Mine =/= false)
-		andalso Wallet
 		andalso IndepRecall
 		andalso Txs
 		andalso Retarget
@@ -593,14 +589,14 @@ validate(NewB, _TXs, _HashListExpected, _WalletListExpected, _OldB, _RecallB) ->
 	ar:report([{block_not_accepted, ar_util:encode(NewB#block.indep_hash)}]),
 	false.
 
-validate_hash_list(NewB#block{hash_list=HashList}, OldB, HashList) ->
+validate_hash_list(NewB=#block{hash_list=HashList}, OldB, HashList) ->
 	ar_block:verify_block_hash_list(NewB, OldB);
-validate_hash_list(_, _, _,) ->
+validate_hash_list(_, _, _) ->
 	false.
 
-validate_wallet_list(#block{wallet_list=undefined}, OldB, RecallB, TXs, _) ->
+validate_wallet_list(#block{wallet_list=undefined}, _, _, _, _) ->
 	false;
-validate_wallet_list(NewB#block{wallet_list=WalletList}, OldB, RecallB, TXs, WalletList) ->
+validate_wallet_list(NewB=#block{wallet_list=WalletList}, OldB, RecallB, TXs, WalletList) ->
 	case validate_wallet_list(WalletList) of
 		false -> false;
 		true  -> ar_block:verify_wallet_list(NewB, OldB, RecallB, TXs)

@@ -355,14 +355,12 @@ try_apply_block(HashList, NextB, TXs, B, RecallB) ->
 	WalletList = ar_node_utils:make_new_wallet_list(
 		NextB, RecallB, TXs, B#block.reward_pool, B#block.wallet_list),
 	ar_node_utils:validate(
-		HashList,
-		WalletList,
 		NextB,
 		TXs,
+		HashList,
+		WalletList,
 		B,
-		RecallB,
-		NextB#block.reward_addr,
-		NextB#block.tags
+		RecallB
 	).
 
 %%%
