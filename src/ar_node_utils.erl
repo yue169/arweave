@@ -14,7 +14,7 @@
 -export([fork_recover/3]).
 -export([filter_out_of_order_txs/2, filter_out_of_order_txs/3]).
 -export([filter_all_out_of_order_txs/2]).
--export([validate/5, validate/8, validate_wallet_list/1]).
+-export([validate/6, validate_wallet_list/1]).
 
 -include("ar.hrl").
 
@@ -480,17 +480,11 @@ filter_all_out_of_order_txs(WalletList, InTXs, OutTXs) ->
 			)
 	end.
 
-%% @doc Validate a block, given a node state and the dependencies.
-validate(#{ hash_list := HashList, wallet_list := WalletList }, B, TXs, OldB, RecallB) ->
-	validate(HashList, WalletList, B, TXs, OldB, RecallB, B#block.reward_addr, B#block.tags).
-
-%% @doc Validate a new block, given a server state, a claimed new block, the last block,
+%% @doc Validate a new block, given the claimed new block, the previous block,
 %% and the recall block.
-validate(_, _, _, _, _, _RecallB = unavailable, _, _) ->
+validate(_, _, _, _, _, _RecallB = unavailable) ->
 	false;
 validate(
-		HashList,
-		WalletList,
 		NewB =
 			#block {
 				hash_list = HashList,
@@ -500,16 +494,26 @@ validate(
 				timestamp = Timestamp
 			},
 		TXs,
+		HashListExpected,
+		WalletListExpected,
 		OldB,
-		RecallB,
-		RewardAddr,
-		Tags) ->
+		RecallB
+	) ->
+	{RewardAddr, Tags, HashListCheck} =
+		case HashList of
+			unset ->
+				{unclaimed, [], true};
+			_ ->
+				{NewB#block.reward_addr, NewB#block.tags,
+				 validate_hash_list(NewB, OldB, HashListExpected)}
+		end,
+	WalletListCheck = validate_wallet_list(NewB, OldB, RecallB, TXs, WalletListExpected),
+
 	% TODO: Fix names.
 	BDSHash = ar_weave:hash(
 		ar_block:generate_block_data_segment(OldB, RecallB, TXs, RewardAddr, Timestamp, Tags),
 		Nonce),
 	Mine = ar_mine:validate_by_hash(BDSHash, Diff),
-	Wallet = validate_wallet_list(WalletList),
 	IndepRecall = ar_weave:verify_indep(RecallB, HashList),
 	Txs = ar_tx:verify_txs(TXs, Diff, OldB#block.wallet_list),
 	Retarget = ar_retarget:validate(NewB, OldB),
@@ -521,8 +525,6 @@ validate(
 	HeightCheck = ar_block:verify_height(NewB, OldB),
 	RetargetCheck = ar_block:verify_last_retarget(NewB),
 	PreviousBCheck = ar_block:verify_previous_block(NewB, OldB),
-	HashlistCheck = ar_block:verify_block_hash_list(NewB, OldB),
-	WalletListCheck = ar_block:verify_wallet_list(NewB, OldB, RecallB, TXs),
 
 	ar:report(
 		[
@@ -540,7 +542,7 @@ validate(
 			{block_height, HeightCheck},
 			{block_retarget_time, RetargetCheck},
 			{block_previous_check, PreviousBCheck},
-			{block_hash_list, HashlistCheck},
+			{block_hash_list, HashListCheck},
 			{block_wallet_list, WalletListCheck}
 		]
 	),
@@ -569,7 +571,7 @@ validate(
 	case HeightCheck of false -> ar:d(invalid_height); _ -> ok	end,
 	case RetargetCheck of false -> ar:d(invalid_retarget); _ -> ok	end,
 	case PreviousBCheck of false -> ar:d(invalid_previous_block); _ -> ok  end,
-	case HashlistCheck of false -> ar:d(invalid_hash_list); _ -> ok  end,
+	case HashListCheck of false -> ar:d(invalid_hash_list); _ -> ok  end,
 	case WalletListCheck of false -> ar:d(invalid_wallet_list_rewards); _ -> ok  end,
 
 	(Mine =/= false)
@@ -584,14 +586,26 @@ validate(
 		andalso HeightCheck
 		andalso RetargetCheck
 		andalso PreviousBCheck
-		andalso HashlistCheck
+		andalso HashListCheck
 		andalso WalletListCheck;
-validate(_HL, WL, NewB = #block { hash_list = unset }, TXs, OldB, RecallB, _, _) ->
-	validate(unset, WL, NewB, TXs, OldB, RecallB, unclaimed, []);
-validate(HL, _WL, NewB = #block { wallet_list = undefined }, TXs,OldB, RecallB, _, _) ->
-	validate(HL, undefined, NewB, TXs, OldB, RecallB, unclaimed, []);
-validate(_HL, _WL, NewB, _TXs, _OldB, _RecallB, _, _) ->
+
+validate(NewB, _TXs, _HashListExpected, _WalletListExpected, _OldB, _RecallB) ->
 	ar:report([{block_not_accepted, ar_util:encode(NewB#block.indep_hash)}]),
+	false.
+
+validate_hash_list(NewB#block{hash_list=HashList}, OldB, HashList) ->
+	ar_block:verify_block_hash_list(NewB, OldB);
+validate_hash_list(_, _, _,) ->
+	false.
+
+validate_wallet_list(#block{wallet_list=undefined}, OldB, RecallB, TXs, _) ->
+	false;
+validate_wallet_list(NewB#block{wallet_list=WalletList}, OldB, RecallB, TXs, WalletList) ->
+	case validate_wallet_list(WalletList) of
+		false -> false;
+		true  -> ar_block:verify_wallet_list(NewB, OldB, RecallB, TXs)
+	end;
+validate_wallet_list(_, _, _, _, _) ->
 	false.
 
 %% @doc Ensure that all wallets in the wallet list have a positive balance.
