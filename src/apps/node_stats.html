@@ -1,0 +1,94 @@
+<html>
+    <head>
+        <title>Arweave Node Info</title>
+        <script>
+        function getInfo() {
+            var req = new XMLHttpRequest();
+            req.open('GET', "http://127.0.0.1:1984/info", true);
+            req.onload = function(e) {
+                if(req.status == 200) {
+                    var res = JSON.parse(req.responseText);
+
+                    var height = document.getElementById("height");
+                    var current = document.getElementById("current");
+                    var peers = document.getElementById("peers");
+                    var node_state_latency = document.getElementById("node_state_latency");
+                    var release = document.getElementById("release");
+                    var network = document.getElementById("network");
+
+                    height.innerHTML = res.height;
+                    current.innerHTML = res.current;
+                    peers.innerHTML = res.peers;
+                    node_state_latency.innerHTML = res.node_state_latency;
+                    release.innerHTML = res.release;
+                    network.innerHTML = res.network;
+                }
+            }
+            req.send();
+        }
+
+        getInfo();
+        </script>
+        <style>
+            /* PLEASE STYLE ME! */
+            html {
+                font-family: sans-serif;
+            }
+            .title {
+                font-family: sans-serif;
+                font-size: 2.5em;
+            }
+            .output {
+                font-family: "Courier New", Courier, monospace;
+                font-size: 1.5em;
+                margin-left: 1em;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>
+            Arweave node info
+        </h1>
+        <h3>
+            Last updated for: Arweave.N.1.5-RC-2
+        </h3>
+        <div id="results">
+            <div class="title">
+                Network
+            </div>
+            <div id="network" class="output">
+
+            </div>
+            <div class="title">
+                Height
+            </div>
+            <div id="height" class="output">
+
+            </div>
+            <div class="title">
+                Current Block
+            </div>
+            <div id="current" class="output">
+
+            </div>
+            <div class="title">
+                Peers
+            </div>
+            <div id="peers" class="output">
+
+            </div>
+            <div class="title">
+                Node latency (ms)
+            </div>
+            <div id="node_state_latency" class="output">
+
+            </div>
+            <div class="title">
+                Release
+            </div>
+            <div id="release" class="output">
+
+            </div>
+        </div>
+    </body>
+</html>
