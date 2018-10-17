@@ -4,7 +4,7 @@
         <script>
         function getInfo() {
             var req = new XMLHttpRequest();
-            req.open('GET', "http://127.0.0.1:1984/info", true);
+            req.open('GET', "/info", true);
             req.onload = function(e) {
                 if(req.status == 200) {
                     var res = JSON.parse(req.responseText);
