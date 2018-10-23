@@ -4,7 +4,8 @@
 -export([get_nodes_connectivity/0,
 		 generate_gephi_csv/2,
 		 get_nodes_version/0,
-		 filter_local_peers/1]).
+		 filter_local_peers/1,
+		 get_peers_clock_diff/1).
 
 %%% Tools for building a map of connected peers.
 %%% Requires graphviz for visualisation.
@@ -99,6 +100,10 @@ get_nodes_version() ->
 filter_local_peers(Peers) ->
 	lists:filter(fun(Peer) -> not is_peer_local(Peer) end, Peers).
 
+%% @doc Return a map of every peers connections including peers with local
+%% addresses.
+get_peers_clock_diff() ->
+	get_peers_clock_diff(get_all_nodes()).
 
 %% INTERNAL
 
@@ -389,3 +394,21 @@ group_by([Item | List], Fun, Acc) ->
 					  [Item | maps:get(Key, Acc, [])],
 					  Acc),
 	group_by(List, Fun, NewAcc).
+
+get_peers_clock_diff(Peers) ->
+	[{Peer, get_peer_clock_diff(Peer)} || Peer <- Peers].
+
+get_peer_clock_diff(Peer) ->
+	Start = os:system_time(second),
+	PeerTime = ar_http_iface:get_time(Peer, 3000),
+	End = os:system_time(second),
+	peer_clock_diff(Start, PeerTime, End).
+
+peer_clock_diff(_, unknown, _) ->
+	unknown;
+peer_clock_diff(CheckStart, PeerTime, _) when PeerTime < CheckStart ->
+	PeerTime - CheckStart;
+peer_clock_diff(_, PeerTime, CheckEnd) when PeerTime > CheckEnd ->
+	PeerTime - CheckEnd;
+peer_clock_diff(_, _, _) ->
+	0.
