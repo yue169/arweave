@@ -252,7 +252,14 @@ do_read_block(Filename, BHL) ->
 		not_found ->
 			invalidate_block(B),
 			unavailable;
-		_ -> FinalB
+		_ ->
+			case ar_meta_db:get(disk_logging) of
+				true ->
+					ar:report([{read_block_from_disk, ar_util:encode(FinalB#block.indep_hash)}]);
+				_ ->
+					do_nothing
+			end,
+			FinalB
 	end.
 
 %% @doc Read an encrypted block from disk, given a hash.
