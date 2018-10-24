@@ -358,6 +358,12 @@ send_to_external(
 							ar_http_iface:send_new_block(Peer, Port, NewB, RecallB, Key, Nonce)
 						end,
 						Peers
+					),
+					ar:report(
+						[
+							{finished_distributing, ar_util:encode(NewB#block.indep_hash)},
+							{peers, length(Peers)}
+						]
 					)
 				end
 			)
