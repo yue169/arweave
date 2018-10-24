@@ -1,6 +1,6 @@
 -module(ar_block).
 -export([block_to_binary/1, block_field_size_limit/1]).
--export([get_recall_block/5, get_recall_block/6]).
+-export([get_recall_block/3]).
 -export([verify_dep_hash/2, verify_indep_hash/1, verify_timestamp/2]).
 -export([verify_height/2, verify_last_retarget/1, verify_previous_block/2]).
 -export([verify_block_hash_list/2, verify_wallet_list/4, verify_weave_size/3]).
@@ -511,44 +511,16 @@ generate_block_from_shadow(BShadow, RecallSize) ->
 	BShadow#block { wallet_list = WalletList, hash_list = HashList }.
 
 
-get_recall_block(OrigPeer,RecallHash,B,Key,Nonce) ->
-	get_recall_block(OrigPeer,RecallHash,B,Key,Nonce, B#block.hash_list).
-get_recall_block(OrigPeer,RecallHash,B,Key,Nonce, BHL) ->
+get_recall_block(OrigPeer,RecallHash, B) when ?IS_BLOCK(B) ->
+	get_recall_block(OrigPeer, RecallHash, B#block.hash_list);
+get_recall_block(OrigPeer, RecallHash, BHL) ->
 	case ar_storage:read_block(RecallHash, BHL) of
 		unavailable ->
-			case ar_storage:read_encrypted_block(RecallHash) of
-				unavailable ->
-					ar:report([{downloading_recall_block, ar_util:encode(RecallHash)}]),
-					FullBlock =
-						ar_http_iface:get_full_block(OrigPeer, RecallHash, B#block.hash_list),
-					case ?IS_BLOCK(FullBlock)  of
-						true ->
-							Recall = FullBlock#block {
-								txs = [ T#tx.id || T <- FullBlock#block.txs]
-							},
-							ar_storage:write_tx(FullBlock#block.txs),
-							ar_storage:write_block(Recall),
-							Recall;
-						false -> unavailable
-					end;
-				EncryptedRecall ->
-					FBlock =
-						ar_block:decrypt_full_block(
-							B,
-							EncryptedRecall,
-							Key,
-							Nonce
-						),
-					case FBlock of
-						unavailable -> unavailable;
-						FullBlock ->
-							Recall = FullBlock#block {
-								txs = [ T#tx.id || T <- FullBlock#block.txs]
-							},
-							ar_storage:write_tx(FullBlock#block.txs),
-							ar_storage:write_block(Recall),
-							Recall
-					end
+			ar:report([{downloading_recall_block, ar_util:encode(RecallHash)}]),
+			FullBlock = ar_http_iface:get_full_block(OrigPeer, RecallHash, BHL),
+			case ?IS_BLOCK(FullBlock) of
+				true -> FullBlock;
+				false -> unavailable
 			end;
 		Recall -> Recall
 	end.
