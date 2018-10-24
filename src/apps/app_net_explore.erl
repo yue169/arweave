@@ -207,7 +207,9 @@ generate_gephi_csv1(Map) ->
     CsvHeader = [<<"Source">>, <<"Target">>, <<"Weight">>],
     CsvBody = gephi_csv_body(gephi_edges(Map)),
     CsvRows = [CsvHeader | CsvBody],
-    NamePrefix = "gephi",
+    write_csv_file("gephi", CsvRows).
+
+write_csv_file(NamePrefix, CsvRows) ->
     {IoDevice, File} = create_csv_file(NamePrefix),
     write_csv_rows(CsvRows, IoDevice),
     close_csv_file(IoDevice, File, NamePrefix).
