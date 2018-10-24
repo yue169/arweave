@@ -1131,13 +1131,15 @@ process_get_info(Body) ->
 	{_, Height} = lists:keyfind(<<"height">>, 1, Struct),
 	{_, Blocks} = lists:keyfind(<<"blocks">>, 1, Struct),
 	{_, Peers} = lists:keyfind(<<"peers">>, 1, Struct),
+	{_, NodeStateLatency} = lists:keyfind(<<"node_state_latency">>, 1, Struct),
 	[
 		{name, NetworkName},
 		{version, ClientVersion},
 		{height, Height},
 		{blocks, Blocks},
 		{peers, Peers},
-		{release, ReleaseNumber}
+		{release, ReleaseNumber},
+		{node_state_latency, NodeStateLatency}
 	].
 
 %% @doc Process the response of an /block call.

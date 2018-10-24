@@ -5,6 +5,7 @@
 -export([get_nodes_connectivity/0]).
 -export([generate_gephi_csv/0]).
 -export([get_peers_clock_diff/0]).
+-export([get_peers_info/1]).
 
 -export([get_peers_clock_diff/1]).
 
@@ -73,6 +74,9 @@ generate_gephi_csv() ->
 
 get_peers_clock_diff() ->
     get_peers_clock_diff(get_all_nodes()).
+
+get_peers_info(_) ->
+    get_peers_info([], get_all_nodes()).
 
 %% @doc Return a map of every peers connections.
 %% Returns a list of tuples with arity 2. The first element is the local peer,
@@ -285,3 +289,15 @@ peer_clock_diff(_, PeerTime, CheckEnd) when PeerTime > CheckEnd ->
     PeerTime - CheckEnd;
 peer_clock_diff(_, _, _) ->
     0.
+
+get_peers_info(_, Nodes) ->
+    Mapper = fun (Peer) ->
+        Latency = case ar_http_iface:get_info(Peer, node_state_latency) of
+            info_unavailable -> <<"info_unavailable">>;
+            L -> integer_to_binary(L)
+        end,
+        [ar_util:format_peer(Peer), Latency]
+    end,
+    CsvBody = lists:map(Mapper, Nodes),
+    CsvRows = [["Node", "node_state_latency"] | CsvBody],
+    write_csv_file("node_info", CsvRows).
