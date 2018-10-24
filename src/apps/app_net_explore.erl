@@ -4,7 +4,7 @@
 -export([filter_offline_nodes/1]).
 -export([get_nodes_connectivity/0]).
 -export([generate_gephi_csv/0]).
--export([get_peers_clock_diff/0]).
+-export([get_nodes_clock_diff/0]).
 -export([get_peers_info/1]).
 
 -export([get_peers_clock_diff/1]).
