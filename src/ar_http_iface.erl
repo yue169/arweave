@@ -1131,7 +1131,10 @@ process_get_info(Body) ->
 	{_, Height} = lists:keyfind(<<"height">>, 1, Struct),
 	{_, Blocks} = lists:keyfind(<<"blocks">>, 1, Struct),
 	{_, Peers} = lists:keyfind(<<"peers">>, 1, Struct),
-	{_, NodeStateLatency} = lists:keyfind(<<"node_state_latency">>, 1, Struct),
+	NodeStateLatency = case lists:keyfind(<<"node_state_latency">>, 1, Struct) of
+		{_, Latency} -> Latency;
+		false -> info_unavailable
+	end,
 	[
 		{name, NetworkName},
 		{version, ClientVersion},
