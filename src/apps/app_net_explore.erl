@@ -72,8 +72,8 @@ get_nodes_connectivity() ->
 generate_gephi_csv() ->
     generate_gephi_csv(get_live_nodes()).
 
-get_peers_clock_diff() ->
-    get_peers_clock_diff(get_all_nodes()).
+get_nodes_clock_diff() ->
+    get_nodes_clock_diff(get_all_nodes()).
 
 get_peers_info(_) ->
     get_peers_info([], get_all_nodes()).
@@ -272,22 +272,22 @@ close_csv_file(IoDevice, File, NamePrefix) ->
     ok = file:close(IoDevice),
     io:format("~s CSV file written to: '~s'~n", [NamePrefix, File]).
 
-get_peers_clock_diff(Peers) ->
-    [{Peer, get_peer_clock_diff(Peer)} || Peer <- Peers].
+get_nodes_clock_diff(Peers) ->
+    [{Peer, get_node_clock_diff(Peer)} || Peer <- Peers].
 
-get_peer_clock_diff(Peer) ->
+get_node_clock_diff(Peer) ->
     Start = os:system_time(second),
     PeerTime = ar_http_iface:get_time(Peer, 3000),
     End = os:system_time(second),
-    peer_clock_diff(Start, PeerTime, End).
+    node_clock_diff(Start, PeerTime, End).
 
-peer_clock_diff(_, unknown, _) ->
+node_clock_diff(_, unknown, _) ->
     unknown;
-peer_clock_diff(CheckStart, PeerTime, _) when PeerTime < CheckStart ->
+node_clock_diff(CheckStart, PeerTime, _) when PeerTime < CheckStart ->
     PeerTime - CheckStart;
-peer_clock_diff(_, PeerTime, CheckEnd) when PeerTime > CheckEnd ->
+node_clock_diff(_, PeerTime, CheckEnd) when PeerTime > CheckEnd ->
     PeerTime - CheckEnd;
-peer_clock_diff(_, _, _) ->
+node_clock_diff(_, _, _) ->
     0.
 
 get_peers_info(_, Nodes) ->
