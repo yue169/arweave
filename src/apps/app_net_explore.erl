@@ -204,24 +204,21 @@ generate_gephi_csv(Nodes) ->
 %% @doc Like generate_gephi_csv/0 but takes the host-to-peers map to use in the
 %% export.
 generate_gephi_csv1(Map) ->
-    {IoDevice, File} = create_gephi_file(),
-    write_gephi_csv_header(IoDevice),
-    write_gephi_csv_rows(gephi_edges(Map), IoDevice),
-    ok = file:close(IoDevice),
-    io:format("Gephi CSV file written to: '" ++ File ++ "'~n").
+    CsvHeader = [<<"Source">>, <<"Target">>, <<"Weight">>],
+    CsvBody = gephi_csv_body(gephi_edges(Map)),
+    CsvRows = [CsvHeader | CsvBody],
+    NamePrefix = "gephi",
+    {IoDevice, File} = create_csv_file(NamePrefix),
+    write_csv_rows(CsvRows, IoDevice),
+    close_csv_file(IoDevice, File, NamePrefix).
 
 %% @doc Create the new CSV file in write mode and return the IO device and the
 %% filename.
-create_gephi_file() ->
-    CsvFile = filename("gephi", "csv"),
+create_csv_file(NamePrefix) ->
+    CsvFile = filename(NamePrefix, "csv"),
     ok = filelib:ensure_dir(CsvFile),
     {ok, IoDevice} = file:open(CsvFile, [write]),
     {IoDevice, CsvFile}.
-
-%% @doc Write the CSV header line to the IO device.
-write_gephi_csv_header(IoDevice) ->
-    Header = <<"Source,Target,Weight\n">>,
-    ok = file:write(IoDevice, Header).
 
 %% @doc Transform the host to peers map into a list of all connections where
 %% each connection is a three-tuple of host, peer, weight.
@@ -238,16 +235,36 @@ gephi_edges([{Host, Peers} | Map], Acc) ->
     NewAcc = lists:foldl(Folder, Acc, PeersWithPosition),
     gephi_edges(Map, NewAcc).
 
-%% @doc Write the list of connections to the IO device.
-write_gephi_csv_rows([], _) ->
+gephi_csv_body(Edges) ->
+    Mapper = fun ({Host, Peer, Weight}) ->
+        [ar_util:format_peer(Host),
+         ar_util:format_peer(Peer),
+         io_lib:format("~f", [Weight])]
+    end,
+    lists:map(Mapper, Edges).
+
+%% @doc TBD.
+write_csv_rows([], _) ->
     done;
-write_gephi_csv_rows([Edge | Edges], IoDevice) ->
-    {Host, Peer, Weight} = Edge,
-    Row = io_lib:format("~s,~s,~f\n", [ar_util:format_peer(Host),
-                                       ar_util:format_peer(Peer),
-                                       Weight]),
-    ok = file:write(IoDevice, Row),
-    write_gephi_csv_rows(Edges, IoDevice).
+write_csv_rows([Row | Rows], IoDevice) ->
+    ok = file:write(IoDevice, csv_row(Row)),
+    write_csv_rows(Rows, IoDevice).
+
+%% @doc TBD
+csv_row(Row) ->
+    iolist_to_binary(csv_row(Row, [])).
+
+csv_row([], _) ->
+    [];
+csv_row([LastValue], Acc) ->
+    lists:reverse(["\n", LastValue | Acc]);
+csv_row([Value | Values], Acc) ->
+    csv_row(Values, [<<",">>, Value | Acc]).
+
+%% @doc TBD
+close_csv_file(IoDevice, File, NamePrefix) ->
+    ok = file:close(IoDevice),
+    io:format("~s CSV file written to: '~s'~n", [NamePrefix, File]).
 
 get_peers_clock_diff(Peers) ->
     [{Peer, get_peer_clock_diff(Peer)} || Peer <- Peers].
