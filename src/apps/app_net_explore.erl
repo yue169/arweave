@@ -5,9 +5,10 @@
 -export([get_nodes_connectivity/0]).
 -export([generate_gephi_csv/0]).
 -export([get_nodes_clock_diff/0]).
--export([get_peers_info/1]).
+-export([get_nodes_info/1]).
 
--export([get_peers_clock_diff/1]).
+-export([get_nodes_clock_diff/1, generate_gephi_csv1/1, csv_row/1]).
+-export([get_nodes_info/2]).
 
 %%% Tools for building a map of connected peers.
 %%% Requires graphviz for visualisation.
@@ -75,8 +76,8 @@ generate_gephi_csv() ->
 get_nodes_clock_diff() ->
     get_nodes_clock_diff(get_all_nodes()).
 
-get_peers_info(_) ->
-    get_peers_info([], get_all_nodes()).
+get_nodes_info(Fields) ->
+    get_nodes_info([], get_all_nodes()).
 
 %% @doc Return a map of every peers connections.
 %% Returns a list of tuples with arity 2. The first element is the local peer,
@@ -290,14 +291,25 @@ node_clock_diff(_, PeerTime, CheckEnd) when PeerTime > CheckEnd ->
 node_clock_diff(_, _, _) ->
     0.
 
-get_peers_info(_, Nodes) ->
-    Mapper = fun (Peer) ->
-        Latency = case ar_http_iface:get_info(Peer, node_state_latency) of
-            info_unavailable -> <<"info_unavailable">>;
-            L -> integer_to_binary(L)
-        end,
-        [ar_util:format_peer(Peer), Latency]
-    end,
-    CsvBody = lists:map(Mapper, Nodes),
-    CsvRows = [["Node", "node_state_latency"] | CsvBody],
+get_nodes_info(Fields, Nodes) ->
+    CsvRows = [info_csv_header(Fields) | info_csv_body(Fields, Nodes)],
     write_csv_file("node_info", CsvRows).
+
+info_csv_header(Fields) ->
+    lists:map(fun (Field) -> erlang:atom_to_binary(Field, utf8) end, Fields).
+
+info_csv_body(Fields, Nodes) ->
+    Mapper = fun (Peer) ->
+        FieldCsvValues = case ar_http_iface:get_info(Peer) of
+            info_unavailable -> lists:duplicate(length(Fields), <<"info_unavailable">>);
+            FieldValues -> lists:map(fun to_binary/1, FieldValues)
+        end,
+        [ar_util:format_peer(Peer) | FieldCsvValues]
+    end,
+    lists:map(Mapper, Nodes).
+
+to_binary(Atom) when is_atom(Atom) -> erlang:atom_to_binary(Atom, utf8);
+to_binary(Int) when is_integer(Int) -> integer_to_binary(Int);
+to_binary(Float) when is_float (Float) ->
+    list_to_binary(io_lib:format("~f", [Float])).
+to_binary(Value) -> iolist_to_binary(Value).
