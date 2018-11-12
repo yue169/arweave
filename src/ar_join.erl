@@ -81,10 +81,9 @@ verify_time_sync(Peers) ->
 	lists:all(
 		fun(Peer) ->
 			LocalT = os:system_time(second),
-			RemoteT = ar_http_iface:get_time(Peer),
-			case RemoteT of
+			case ar_http_iface:get_time(Peer) of
 				unknown -> true;
-				_ ->
+				RemoteT ->
 					(LocalT >= (RemoteT - ?NODE_TIME_SYNC_TOLERANCE)) andalso
 					(LocalT =< (RemoteT + ?NODE_TIME_SYNC_TOLERANCE))
 			end
