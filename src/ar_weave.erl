@@ -229,10 +229,11 @@ calculate_recall_block(IndepHash, Height, _HashList) ->
 %% and the TXs and the nonce.
 hash(DataSegment, Nonce) ->
 	% ar:d({hash, {data, DataSegment}, {nonce, Nonce}, {timestamp, Timestamp}}),
-	crypto:hash(
-		?MINING_HASH_ALG,
-		<< Nonce/binary, DataSegment/binary >>
-	).
+	%crypto:hash(
+	%	?MINING_HASH_ALG,
+	%	<< Nonce/binary, DataSegment/binary >>
+	%).
+	ar_progwork:calculate(<< Nonce/binary, DataSegment/binary >>).
 
 %% @doc Create an independent hash from a block. Independent hashes
 %% verify a block's contents in isolation and are stored in a node's hash list.

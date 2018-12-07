@@ -311,10 +311,7 @@ basic_test() ->
 				Timestamp,
 				[]
 			),
-			Res = crypto:hash(
-				?MINING_HASH_ALG,
-				<< Nonce/binary, DataSegment/binary >>
-			),
+			Res = ar_weave:hash(DataSegment, Nonce),
 			<< 0:Diff, _/bitstring >> = Res
 	end.
 
@@ -340,10 +337,7 @@ change_data_test() ->
 				Timestamp,
 				[]
 			),
-			Res = crypto:hash(
-				?MINING_HASH_ALG,
-				<< Nonce/binary, DataSegment/binary >>
-			),
+			Res = ar_weave:hash(DataSegment, Nonce),
 			<< 0:Diff, _/bitstring >> = Res,
 			MinedTXs == NewTXs
 	end.

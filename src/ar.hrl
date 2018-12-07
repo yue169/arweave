@@ -4,13 +4,13 @@
 -define(FORK_1_6, 95000).
 
 %% @doc How nodes identify they are on the same network.
--define(NETWORK_NAME, "arweave.N.1").
+-define(NETWORK_NAME, "arweave.TN.2").
 
 %% @doc Current release number of the arweave client software.
--define(CLIENT_VERSION, 5).
+-define(CLIENT_VERSION, 6).
 
 %% @doc The current build number -- incremented for every release.
--define(RELEASE_NUMBER, 19).
+-define(RELEASE_NUMBER, 20).
 
 -define(DEFAULT_REQUEST_HEADERS,
 	[
@@ -47,11 +47,11 @@
 -define(PRIV_KEY_SZ, 4096).
 
 %% @doc NB: Setting the default difficulty high will cause TNT to fail.
--define(DEFAULT_DIFF, 8).
+-define(DEFAULT_DIFF, 1).
 -ifdef(DEBUG).
 -define(MIN_DIFF, ?DEFAULT_DIFF).
 -else.
--define(MIN_DIFF, 31).
+-define(MIN_DIFF, 3).
 -endif.
 
 -ifndef(TARGET_TIME).
@@ -84,7 +84,7 @@
 -define(COST_PER_BYTE, (?WINSTON_PER_AR div ?BASE_BYTES_PER_AR)).
 
 %% The difficulty "center" at which 1 byte costs ?BASE_BYTES_PER_AR
--define(DIFF_CENTER, 40).
+-define(DIFF_CENTER, 4).
 
 %% @doc The amount of the weave to store. 1.0 = 100%; 0.5 = 50% etc.
 -define(WEAVE_STORE_AMT, 1.0).

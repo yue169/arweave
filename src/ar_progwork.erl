@@ -1,6 +1,7 @@
 -module(ar_progwork).
 -export([calculate/1]).
 -export([test_distribution/2]).
+-include("ar.hrl").
 
 %%% An experimental ASIC-resistant proof of work based on generalised computation.
 %%% The algorithm takes an input binary, uses a pseudo-random number generator,
@@ -18,8 +19,14 @@
 %%% Constants
 -define(PROGWORK_HASH_ALG, sha256).
 -define(PROGWORK_PRNG_ALG, exrop).
+
+-ifdef(DEBUG).
+-define(PROG_LENGTH, 10).
+-define(RUN_LENGTH, 50).
+-else.
 -define(PROG_LENGTH, 1000).
 -define(RUN_LENGTH, 50000).
+-endif.
 -define(NUM_REGISTERS, 16).
 -define(REGISTER_SZ, 64).
 -define(REGISTER_MAX, (erlang:trunc(math:pow(2, ?REGISTER_SZ)) - 1)).
