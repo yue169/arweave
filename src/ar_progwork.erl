@@ -30,7 +30,7 @@
 -define(NUM_REGISTERS, 16).
 -define(REGISTER_SZ, 64).
 -define(REGISTER_MAX, (erlang:trunc(math:pow(2, ?REGISTER_SZ)) - 1)).
--define(INSTRUCTION_SET_SZ, 13).
+-define(INSTRUCTION_SET_SZ, 12).
 
 %%% Records
 -record(cpu, {
@@ -106,14 +106,14 @@ opcode_to_instruction(2) -> jmp;
 opcode_to_instruction(3) -> add;
 opcode_to_instruction(4) -> sub;
 opcode_to_instruction(5) -> mul;
-opcode_to_instruction(6) -> idiv;
-opcode_to_instruction(7) -> inc_ptr;
-opcode_to_instruction(8) -> dec_ptr;
-opcode_to_instruction(9) -> test;
-opcode_to_instruction(10) -> clr;
-opcode_to_instruction(11) -> jgt;
-opcode_to_instruction(12) -> jlt;
-opcode_to_instruction(13) -> je.
+%opcode_to_instruction(6) -> idiv;
+opcode_to_instruction(6) -> inc_ptr;
+opcode_to_instruction(7) -> dec_ptr;
+opcode_to_instruction(8) -> test;
+opcode_to_instruction(9) -> clr;
+opcode_to_instruction(10) -> jgt;
+opcode_to_instruction(11) -> jlt;
+opcode_to_instruction(12) -> je.
 
 
 %% @doc Execute the program for the given number of instructions.
@@ -154,23 +154,23 @@ apply_instruction(nop, _, CPU) ->
 apply_instruction(jmp, Regs, CPU) ->
 	jmp(Regs, CPU);
 apply_instruction(add, [A, B], CPU = #cpu { register_ptr = RP, registers = Regs }) ->
-	CPU#cpu { registers = array:set(RP - 1, A + B, Regs) };
+	CPU#cpu { registers = set_register(RP, A + B, Regs) };
 apply_instruction(sub, [A, B], CPU = #cpu { register_ptr = RP, registers = Regs }) ->
-	CPU#cpu { registers = array:set(RP - 1, A - B, Regs) };
+	CPU#cpu { registers = set_register(RP, A - B, Regs) };
 apply_instruction(mul, [A, B], CPU = #cpu { register_ptr = RP, registers = Regs }) ->
-	CPU#cpu { registers = array:set(RP - 1, A * B, Regs) };
-apply_instruction(idiv, [A, B], CPU = #cpu { register_ptr = RP, registers = Regs }) ->
-	CPU#cpu {
-		registers =
-			array:set(
-				RP - 1,
-				case (A == 0) or (B == 0) of
-					true -> 0;
-					false -> A div B
-				end,
-				Regs
-			)
-	};
+	CPU#cpu { registers = set_register(RP, A * B, Regs) };
+%apply_instruction(idiv, [A, B], CPU = #cpu { register_ptr = RP, registers = Regs }) ->
+%	CPU#cpu {
+%		registers =
+%			array:set(
+%				RP - 1,
+%				case (A == 0) or (B == 0) of
+%					true -> 0;
+%					false -> A div B
+%				end,
+%				Regs
+%			)
+%	};
 apply_instruction(inc_ptr, _, CPU = #cpu { register_ptr = RP }) ->
 	CPU#cpu {
 		register_ptr =
@@ -205,6 +205,10 @@ apply_instruction(jlt, Regs, CPU = #cpu { test_flag = TF }) ->
 apply_instruction(je, Regs, CPU = #cpu { test_flag = TF }) ->
 	case TF of 0 -> jmp(Regs, CPU); _ -> CPU end.
 
+
+%% @doc Set the value of a register and apply range bounding.
+set_register(RP, Value, Regs) ->
+	array:set(RP - 1, Value rem ?REGISTER_MAX, Regs).
 
 %% @doc Perform a jump to the first operand register.
 jmp([Loc, _], CPU) ->
