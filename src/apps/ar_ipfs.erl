@@ -89,10 +89,14 @@ add_data(IP, Port, DataB, FilenameB) ->
 	Body = format_multipart_formdata(Boundary, [{Filename, Data}]),
 	ContentType = lists:concat(["multipart/form-data; boundary=", Boundary]),
 	Headers = [{"Content-Length", integer_to_list(length(Body))}],
-	{ok, Response} = request(post, {URL, Headers, ContentType, Body}),
-	{Props} = response_to_json(Response),
-	{<<"Hash">>, Hash} = lists:keyfind(<<"Hash">>, 1, Props),
-	{ok, Hash}.
+	case request(post, {URL, Headers, ContentType, Body}) of
+		{ok, Response} ->
+			{Props} = response_to_json(Response),
+			{<<"Hash">>, Hash} = lists:keyfind(<<"Hash">>, 1, Props),
+			{ok, Hash};
+		{error, Reason} ->
+			{error, Reason}
+	end.
 
 add_file(Path) ->
 	add_file(?IPFS_HOST, ?IPFS_PORT, Path).
@@ -174,6 +178,7 @@ request(Method, Request) ->
 		{ok, {_, _, Body}} ->
 			{ok, list_to_binary(Body)};
 		Error ->
+			ar:report({?MODULE, error, Error}),
 			% example errors:
 			% {error,{failed_connect,[{to_address,{"127.0.0.1",5001}},
 			%                         {inet,[inet],econnrefused}]}}

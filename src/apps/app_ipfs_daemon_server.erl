@@ -342,8 +342,10 @@ ipfs_getter(APIKey, Queue, Wallet, IPFSHash) ->
 	status_update(APIKey, IPFSHash, Status).
 
 pin_provide_hash(Data, IPFSHash) ->
-	{ok, _Hash2} = ar_ipfs:add_data(Data, IPFSHash),
-	spawn(ar_ipfs, dht_provide_hash, [IPFSHash]).
+	case ar_ipfs:add_data(Data, IPFSHash) of
+		{ok, _Hash} -> spawn(ar_ipfs, dht_provide_hash, [IPFSHash]);
+		{error, _}  -> ok
+	end.
 
 current_status(APIKey) ->
 	case mnesia:dirty_select(

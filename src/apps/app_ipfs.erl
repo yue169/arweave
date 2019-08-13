@@ -182,23 +182,18 @@ server(State=#state{
 		{queue_tx, UnsignedTX} ->
 			app_queue:add(Q, UnsignedTX),
 			server(State);
-		{recv_new_tx, TX=#tx{tags=Tags}} ->
-			ar:d({app_ipfs, recv_new_tx, ar_util:encode(TX#tx.id)}),
+		{recv_new_tx, TX=#tx{tags=Tags, id=ID}} ->
+			ar:report({?MODULE, recv_new_tx, ar_util:encode(ID)}),
 			case lists:keyfind(<<"IPFS-Add">>, 1, Tags) of
 				{<<"IPFS-Add">>, Hash} ->
-					{ok, _Hash2} = add_ipfs_data(TX, Hash),
+					ok = add_ipfs_data(TX, Hash),
 					spawn(ar_ipfs, dht_provide_hash, [Hash]);
-					%% with validation:
-					%% case ar_ipfs:add_data(TX#tx.data, Hash) of
-					%%	{ok, Hash} -> [Hash|IHs];
-					%%	_          -> IHs
-					%% end;
 				false ->
-					pass
+					ok
 			end,
 			server(State);
 		{recv_new_tx, X} ->
-			ar:d({app_ipfs, recv_new_tx, X}),
+			ar:report({?MODULE, recv_new_tx, X}),
 			server(State)
 	end.
 
@@ -207,7 +202,8 @@ server(State=#state{
 add_ipfs_data(TX, Hash) ->
 	%% version 0.1, no validation
 	ar:d({recv_tx_ipfs_add, ar_util:encode(TX#tx.id), Hash}),
-	{ok, _Hash2} = ar_ipfs:add_data(TX#tx.data, Hash).
+	ar_ipfs:add_data(TX#tx.data, Hash),
+	ok.
 
 get_hash_and_queue(Hash, Queue) ->
 	ar:d({fetching, Hash}),
