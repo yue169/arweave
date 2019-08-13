@@ -13,6 +13,12 @@
 -export([confirmed_transaction/2]).
 -include("../ar.hrl").
 
+-ifdef(DEBUG).
+-define(MAX_TX_BUFFER, 5).
+-else.
+-define(MAX_TX_BUFFER, 50).
+-endif.
+
 -record(state,{
 	adt_pid,
 	wallet,
@@ -184,14 +190,20 @@ server(State=#state{
 			server(State);
 		{recv_new_tx, TX=#tx{tags=Tags, id=ID}} ->
 			ar:report({?MODULE, recv_new_tx, ar_util:encode(ID)}),
-			case lists:keyfind(<<"IPFS-Add">>, 1, Tags) of
-				{<<"IPFS-Add">>, Hash} ->
-					ok = add_ipfs_data(TX, Hash),
-					spawn(ar_ipfs, dht_provide_hash, [Hash]);
-				false ->
-					ok
-			end,
-			server(State);
+			NewState =
+				case lists:keyfind(<<"IPFS-Add">>, 1, Tags) of
+					{<<"IPFS-Add">>, Hash} ->
+						case add_ipfs_data(TX, Hash) of
+							{ok,_} ->
+								spawn(ar_ipfs, dht_provide_hash, [Hash]),
+								State#state{txs=maybe_append_tx(TXs, {ar_util:encode(ID), Hash})};
+							{error,_} ->
+								State
+						end;
+					false ->
+						State
+				end,
+			server(NewState);
 		{recv_new_tx, X} ->
 			ar:report({?MODULE, recv_new_tx, X}),
 			server(State)
@@ -202,8 +214,19 @@ server(State=#state{
 add_ipfs_data(TX, Hash) ->
 	%% version 0.1, no validation
 	ar:d({recv_tx_ipfs_add, ar_util:encode(TX#tx.id), Hash}),
-	ar_ipfs:add_data(TX#tx.data, Hash),
-	ok.
+	ar_ipfs:add_data(TX#tx.data, Hash).
+
+maybe_append_tx(TXs, TX) ->
+	case lists:member(TX, TXs) of
+		true  -> TXs;
+		false -> lists_nthhead(?MAX_TX_BUFFER, [TX|TXs])
+	end.
+
+lists_nthhead(N, Xs) when length(Xs) > N ->
+	{X,_} = lists:split(N, Xs),
+	X;
+lists_nthhead(_, Xs) ->
+	Xs.
 
 get_hash_and_queue(Hash, Queue) ->
 	ar:d({fetching, Hash}),

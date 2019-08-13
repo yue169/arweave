@@ -43,10 +43,12 @@ start() ->
 	mnesia_create_table(ipfsar_key_q_wal,   set, record_info(fields, ipfsar_key_q_wal)),
 	mnesia_create_table(ipfsar_ipfs_status, bag, record_info(fields, ipfsar_ipfs_status)),
 	mnesia_create_table(ipfsar_most_recent, set, record_info(fields, ipfsar_most_recent)),
+	ar_ipfs:daemon_start(),
 	spawn(?MODULE, cleaner_upper, []).
 
 %% @doc Stop all the queues.
 stop() ->
+	ar_ipfs:daemon_stop(),
 	mnesia:foldl(fun(#ipfsar_key_q_wal{queue_pid=Q}, _) ->
 			app_queue:stop(Q)
 		end,

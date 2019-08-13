@@ -1,5 +1,5 @@
 -module(ar_ipfs).
--export([daemon_start/0, daemon_stop/0, daemon_stop/2]).
+-export([daemon_is_running/0, daemon_start/0, daemon_stop/0, daemon_stop/2]).
 -export([add_data/2, add_data/4, add_file/1, add_file/3]).
 -export([cat_data_by_hash/1, cat_data_by_hash/3]).
 -export([config_get_identity/0, config_set_identity/1]).
@@ -15,9 +15,25 @@
 
 -type hash() :: binary().
 
+%% "wishlist: way to ensure ipfs daemon is running"
+%% "How to tell if succeede to start ipfs daemon?"
+%% https://github.com/ipfs/go-ipfs/issues/5983
+daemon_is_running() ->
+	case lists:prefix(
+			"Error: this action must be run in online mode",
+			os:cmd("ipfs swarm peers")
+		) of
+		false -> true;
+		true  -> false
+	end.
+
 daemon_start() ->
-	Pid = spawn(os, cmd, ["ipfs daemon"]),
-	{ok, Pid}.
+	case daemon_is_running() of
+		true -> ok;
+		false  ->
+			spawn(os, cmd, ["ipfs daemon"]),
+			ok
+	end.
 
 daemon_stop() ->
 	daemon_stop(?IPFS_HOST, ?IPFS_PORT).

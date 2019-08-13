@@ -14,6 +14,7 @@ all_ok_test() ->
 		H = make_new_ipfs_hash(),
 		{ok, {{Status, _}, _, Body, _, _}} = send_request(getsend, {K, H}),
 		app_ipfs_daemon_server:del_key(K),
+		stop_all_the_things(),
 		?assertEqual(<<"200">>, Status),
 		?assertEqual(<<"Request sent to queue">>, Body)
 	end}.
@@ -38,7 +39,7 @@ ignore_second_test_() ->
 
 		{ok, {{Status2, _}, _, Body2, _, _}} = send_request(getsend, {K, H}),
 		app_ipfs_daemon_server:del_key(K),
-
+		stop_all_the_things(),
 		?assertEqual(<<"200">>, Status1),
 		?assertEqual(<<"Request sent to queue">>, Body1),
 		?assertEqual(<<"208">>, Status2),
@@ -53,6 +54,9 @@ init_kqw() ->
 	K = <<"api_key_for_test">>,
 	app_ipfs_daemon_server:put_key_wallet(K, W),
 	{K, W}.
+
+stop_all_the_things() ->
+	app_ipfs_daemon_server:stop().
 
 make_new_ipfs_hash() ->
 	Filename = <<"testdata4ipfs.txt">>,

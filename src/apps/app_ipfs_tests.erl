@@ -2,15 +2,28 @@
 -include("../ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
--export([timestamp_data/1]).
-
-get_everipedia_hashes_test_() ->
+runs_while_daemon_down_test_() ->
 	{timeout, 60, fun() ->
-		N = 6,
-		From = 240,
-		{Hashes, _More} = ar_ipfs:ep_get_ipfs_hashes(N, From),
-		lists:foreach(fun(H) -> io:format("Hash: ~p~n", [H]) end, Hashes),
-		?assertEqual(N, length(Hashes))
+		{Node, Wallet, IPFSPid} = setup(),
+		timer:sleep(500),
+		true = ar_ipfs:daemon_is_running(),
+		TXid1 = send_ipfs_tx_mine_block(Node, Wallet, <<>>),
+		TXid1e = ar_util:encode(TXid1),
+		[{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
+		ar:report({?MODULE, ipfs_daemon_stop}),
+		{ok, _Response} = ar_ipfs:daemon_stop(),
+		timer:sleep(500),
+		false = ar_ipfs:daemon_is_running(),
+		TXid2 = send_ipfs_tx_mine_block(Node, Wallet, TXid1),
+		[{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
+		ok = ar_ipfs:daemon_start(),
+		ar:report({?MODULE, ipfs_daemon_start}),
+		timer:sleep(500),
+		true = ar_ipfs:daemon_is_running(),
+		TXid3 = send_ipfs_tx_mine_block(Node, Wallet, TXid2),
+		TXid3e = ar_util:encode(TXid3),
+		[{TXid3e,_},{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
+		closedown(IPFSPid)
 	end}.
 
 % not_sending_already_got_test_() ->
@@ -25,37 +38,62 @@ get_everipedia_hashes_test_() ->
 % 		closedown(IPFSPid)
 % 	end}.
 
-add_local_and_get_test() ->
-	Filename = "known_local.txt",
-	DataDir = "src/apps/app_ipfs_test_data/",
-	Path = DataDir ++ Filename,
-	{ok, Data} = file:read_file(Path),
-	DataToHash = timestamp_data(Data),
-	{ok, Hash} = ar_ipfs:add_data(DataToHash, Filename),
-	{ok, DataToHash} = ar_ipfs:cat_data_by_hash(Hash).
-
 %%% private
 
-% setup() ->
-% 	Node = ar_node_init(),
-% 	timer:sleep(1000),
-% 	Wallet = ar_wallet:new(),
-% 	case whereis(app_ipfs) of
-% 		undefined -> ok;
-% 		AlreadyRunningPid -> app_ipfs:stop(AlreadyRunningPid)
-% 	end,
-% 	{ok, Pid} = app_ipfs:start([Node], Wallet, []),
-% 	timer:sleep(1000),
-% 	{Node, Pid}.
+setup() ->
+	{Node, Wallet} = ar_node_init(),
+	prepare_tx_adder(Node),
+	ok = ar_ipfs:daemon_start(),
+	{ok, Pid} = app_ipfs:start([Node], undefined, ""),
+	{Node, Wallet, Pid}.
 
-% closedown(IPFSPid) ->
-% 	app_ipfs:stop(IPFSPid).
+ar_node_init() ->
+	ar_storage:clear(),
+	W = ar_wallet:new(),
+	B = ar_weave:init([{ar_wallet:to_address(W), ?AR(1000), <<>>}]),
+	Pid = ar_node:start([], B),
+	{Pid, W}.
 
-% ar_node_init() ->
-% 	ar_storage:clear(),
-% 	B0 = ar_weave:init([]),
-% 	Pid = ar_node:start([], B0),
-% 	Pid.
+prepare_tx_adder(Node) ->
+	ar_http_iface_server:reregister(Node),
+	Bridge = ar_bridge:start([], [], Node),
+	ar_http_iface_server:reregister(http_bridge_node, Bridge),
+	ar_node:add_peers(Node, Bridge).
+
+send_ipfs_tx_mine_block(Node, Wallet, LastTX) ->
+	TS = ar_ipfs:rfc3339_timestamp(),
+	Filename = <<"testdata.txt">>,
+	Data = timestamp_data(TS, <<"Data">>),
+	Tags = [{<<"IPFS-Add">>, Filename}], % should be IPFSHash
+	Reward = ?AR(1),
+	TX = tag_tx(ar_tx:new(Data, Reward, LastTX), Tags),
+	STX = ar_tx:sign(TX, Wallet),
+	send_tx_mine_block(Node, STX),
+	STX#tx.id.
+
+send_tx_mine_block(Node, TX) ->
+	ar_node:add_tx(Node, TX),
+	timer:sleep(1000),
+	ar_node:mine(Node),
+	timer:sleep(1000),
+	ok.
+
+closedown(IPFSPid) ->
+	app_ipfs:stop(IPFSPid),
+	ar_ipfs:daemon_stop().
+
+numbered_fn(N) ->
+	NB = integer_to_binary(N),
+	<<"testdata-", NB/binary, ".txt">>.
+
+tag_tx(TX, Tags) ->
+	TX#tx{tags=Tags}.
+
+timestamp_data(Data) ->
+	timestamp_data(ar_ipfs:rfc3339_timestamp(), Data).
+timestamp_data(TS, Data) ->
+	<<TS/binary, "  *  ", Data/binary>>.
+
 
 % mine_n_blocks_on_node(N, Node) ->
 % 	lists:foreach(fun(_) ->
@@ -115,26 +153,3 @@ add_local_and_get_test() ->
 % 		end,
 % 		ipfs_hashes_to_data(Pid)).
 
-% numbered_fn(N) ->
-% 	NB = integer_to_binary(N),
-% 	<<"testdata-", NB/binary, ".txt">>.
-
-% prepare_tx_adder(Node) ->
-% 	ar_http_iface_server:reregister(Node),
-% 	Bridge = ar_bridge:start([], [], Node),
-% 	ar_http_iface_server:reregister(http_bridge_node, Bridge),
-% 	ar_node:add_peers(Node, Bridge).
-
-% send_tx_mine_block(Node, TX) ->
-% 	ar_http_iface_client:send_new_tx({127, 0, 0, 1, 1984}, TX),
-% 	receive after 1000 -> ok end,
-% 	ar_node:mine(Node),
-% 	receive after 1000 -> ok end.
-
-% tag_tx(TX, Tags) ->
-% 	TX#tx{tags=Tags}.
-
-timestamp_data(Data) ->
-	timestamp_data(ar_ipfs:rfc3339_timestamp(), Data).
-timestamp_data(TS, Data) ->
-	<<TS/binary, "  *  ", Data/binary>>.
