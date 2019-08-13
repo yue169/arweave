@@ -6,6 +6,7 @@ put_get_key_test() ->
 	{K, W} = init_kqw(),
 	{ok, _Q, W} = app_ipfs_daemon_server:get_key_q_wallet(K),
 	app_ipfs_daemon_server:del_key(K),
+	stop_all_the_things(),
 	ok.
 
 all_ok_test() ->
@@ -60,7 +61,7 @@ stop_all_the_things() ->
 
 make_new_ipfs_hash() ->
 	Filename = <<"testdata4ipfs.txt">>,
-	DataToHash = app_ipfs_tests:timestamp_data(Filename),
+	DataToHash = ar_ipfs_tests:timestamp_data(Filename),
 	{ok, Hash} = ar_ipfs:add_data(DataToHash, Filename),
 	Hash.
 

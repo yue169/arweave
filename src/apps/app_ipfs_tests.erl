@@ -5,20 +5,18 @@
 runs_while_daemon_down_test_() ->
 	{timeout, 60, fun() ->
 		{Node, Wallet, IPFSPid} = setup(),
-		timer:sleep(500),
 		true = ar_ipfs:daemon_is_running(),
 		TXid1 = send_ipfs_tx_mine_block(Node, Wallet, <<>>),
 		TXid1e = ar_util:encode(TXid1),
 		[{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
 		ar:report({?MODULE, ipfs_daemon_stop}),
 		{ok, _Response} = ar_ipfs:daemon_stop(),
-		timer:sleep(500),
+		timer:sleep(1000),
 		false = ar_ipfs:daemon_is_running(),
 		TXid2 = send_ipfs_tx_mine_block(Node, Wallet, TXid1),
 		[{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
 		ok = ar_ipfs:daemon_start(),
 		ar:report({?MODULE, ipfs_daemon_start}),
-		timer:sleep(500),
 		true = ar_ipfs:daemon_is_running(),
 		TXid3 = send_ipfs_tx_mine_block(Node, Wallet, TXid2),
 		TXid3e = ar_util:encode(TXid3),
@@ -89,8 +87,6 @@ numbered_fn(N) ->
 tag_tx(TX, Tags) ->
 	TX#tx{tags=Tags}.
 
-timestamp_data(Data) ->
-	timestamp_data(ar_ipfs:rfc3339_timestamp(), Data).
 timestamp_data(TS, Data) ->
 	<<TS/binary, "  *  ", Data/binary>>.
 

@@ -32,6 +32,7 @@ daemon_start() ->
 		true -> ok;
 		false  ->
 			spawn(os, cmd, ["ipfs daemon"]),
+			timer:sleep(2000),
 			ok
 	end.
 

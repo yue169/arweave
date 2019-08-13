@@ -589,9 +589,14 @@ test_slow() ->
 	ar_fork_recovery:multiple_blocks_ahead_with_transaction_recovery_test_slow(),
 	ar_tx:check_last_tx_test_slow().
 
-%% @doc Run the tests for the IPFS integration. Requires a running local IPFS node.
+%% @doc Run the tests for the IPFS integration. Requires IPFS: the tests will
+%% start and stop the `ipfs daemon` as required.
 test_ipfs() ->
-	Mods = [app_ipfs_tests, app_ipfs_daemon_server_tests],
+	Mods = [
+		ar_ipfs_tests,
+		app_ipfs_tests,
+		app_ipfs_daemon_server_tests
+	],
 	tests(Mods, #config {}).
 
 %% @doc Generate the project documentation.

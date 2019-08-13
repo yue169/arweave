@@ -49,11 +49,14 @@ start() ->
 %% @doc Stop all the queues.
 stop() ->
 	ar_ipfs:daemon_stop(),
-	mnesia:foldl(fun(#ipfsar_key_q_wal{queue_pid=Q}, _) ->
-			app_queue:stop(Q)
-		end,
-		ok,
-		ipfsar_key_q_wal).
+	Qs = mnesia:dirty_select(
+		ipfsar_key_q_wal,
+		[{
+			#ipfsar_key_q_wal{queue_pid='$1', _='_'},
+			[],
+			['$1']
+		}]),
+	lists:foreach(fun(Q) -> app_queue:stop(Q) end, Qs).
 
 %% @doc Find the wallet keyfile for the given address, and call put_key_wal/2.
 %% Returns pid for the generated queue.
@@ -440,7 +443,7 @@ queued_status_hash(APIKey, IPFSHash) ->
 
 %% @doc Given a request, returns the json body as a struct (or error).
 request_to_struct(Req) ->
-	case ar_http_iface_handler:read_complete_body(Req) of
+	case ar_http_iface_middleware:read_complete_body(Req) of
 		{ok, JSON, ReadReq} ->
 			case ar_serialize:json_decode(JSON) of
 				{ok, {Struct}} ->
