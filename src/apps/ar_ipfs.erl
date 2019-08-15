@@ -6,6 +6,7 @@
 -export([dht_provide_hash/1, dht_provide_hash/3]).
 -export([key_gen/1, key_gen/3]).
 -export([pin_ls/0, pin_ls/2]).
+-export([pin_rm/1, pin_rm/3]).
 -export([ep_get_ipfs_hashes/2, hashes_only/1]).
 -export([rfc3339_timestamp/0, rfc3339_timestamp/1]).
 
@@ -40,8 +41,9 @@ daemon_stop() ->
 	daemon_stop(?IPFS_HOST, ?IPFS_PORT).
 
 daemon_stop(IP, Port) ->
-    URL = "http://" ++ IP ++ ":" ++ Port ++ "/api/v0/shutdown",
-    {ok, _} = request(post, {URL, [], "", ""}).
+	Path = "/api/v0/shutdown",
+    URL = "http://" ++ IP ++ ":" ++ Port ++ Path,
+    {ok, _} = request(post, {URL, [], "", ""}, Path).
 
 ep_get_ipfs_hashes(N, From) ->
 	{ok, _} = application:ensure_all_started(ssl),
@@ -57,7 +59,7 @@ ep_get_ipfs_hashes(N, From) ->
 		{limit, N}
 	],
 	Body = jiffy:encode({ReqProps}),
-	{ok, Response} = request(post, {URL, Headers, ContentType, Body}),
+	{ok, Response} = request(post, {URL, Headers, ContentType, Body}, "ep_get_ipfs_hashes"),
 	{RespProps} = response_to_json(Response),
 	MaybeMore = case lists:keyfind(<<"more">>, 1, RespProps) of
 		{<<"more">>, More} -> More;
@@ -99,14 +101,15 @@ add_data(Data, Filename) ->
 	add_data(?IPFS_HOST, ?IPFS_PORT, Data, Filename).
 
 add_data(IP, Port, DataB, FilenameB) ->
-	URL = "http://" ++ IP ++ ":" ++ Port ++ "/api/v0/add?pin=true",
+	Path = "/api/v0/add?pin=true",
+	URL = "http://" ++ IP ++ ":" ++ Port ++ Path,
 	Data = binary_to_list(DataB),
 	Filename = thing_to_list(FilenameB),
 	Boundary = ?BOUNDARY,
 	Body = format_multipart_formdata(Boundary, [{Filename, Data}]),
 	ContentType = lists:concat(["multipart/form-data; boundary=", Boundary]),
 	Headers = [{"Content-Length", integer_to_list(length(Body))}],
-	case request(post, {URL, Headers, ContentType, Body}) of
+	case request(post, {URL, Headers, ContentType, Body}, Path) of
 		{ok, Response} ->
 			{Props} = response_to_json(Response),
 			{<<"Hash">>, Hash} = lists:keyfind(<<"Hash">>, 1, Props),
@@ -128,7 +131,7 @@ cat_data_by_hash(Hash) ->
 
 cat_data_by_hash(IP, Port, Hash) ->
 	URL = "http://" ++ IP ++ ":" ++ Port ++ "/api/v0/cat?arg=" ++ binary_to_list(Hash),
-	request(get, {URL, []}).
+	request(get, {URL, []}, "/api/v0/cat").
 
 -spec config_get_identity() -> string().
 config_get_identity() ->
@@ -146,7 +149,7 @@ dht_provide_hash(IP, Port, IPFSHash) ->
     URL = "http://" ++ IP ++ ":" ++ Port ++ "/api/v0/dht/provide?arg="
 		++ thing_to_list(IPFSHash),
 	ar:d({ar_ipfs, dht_provide_hash, IPFSHash}),
-	request(get, {URL, []}).
+	request(get, {URL, []}, "/api/v0/dht/provide").
 
 -spec key_gen(string()) -> {ok, hash()} | {error, list()}.
 key_gen(Name) ->
@@ -155,7 +158,7 @@ key_gen(Name) ->
 -spec key_gen(string(), string(), string()) -> {ok, binary()} | {error, list()}.
 key_gen(IP, Port, Name) ->
 	URL = "http://" ++ IP ++ ":" ++ Port ++ "/api/v0/key/gen?type=rsa&arg=" ++ Name,
-	{ok, Response} = request(get, {URL, []}),
+	{ok, Response} = request(get, {URL, []}, "/api/v0/key/gen?type=rsa"),
 	{Props} = response_to_json(Response),
 	case lists:keyfind(<<"Id">>, 1, Props) of
 		{<<"Id">>, Key} -> {ok, Key};
@@ -166,12 +169,24 @@ pin_ls() ->
 	pin_ls(?IPFS_HOST, ?IPFS_PORT).
 
 pin_ls(IP, Port) ->
-    URL = "http://" ++ IP ++ ":" ++ Port ++ "/api/v0/pin/ls",
-    {ok, Response} = request(post, {URL, [], [], ""}),
+	Path = "/api/v0/pin/ls",
+    URL = "http://" ++ IP ++ ":" ++ Port ++ Path,
+    {ok, Response} = request(post, {URL, [], [], ""}, Path),
 	{[{<<"Keys">>, {Props}}]} = response_to_json(Response),
 	Hashes = [K || {K, _} <- Props],
 	Hashes.
 
+pin_rm(IPFSHash) ->
+	pin_rm(?IPFS_HOST, ?IPFS_PORT, IPFSHash).
+
+pin_rm(IP, Port, IPFSHash) ->
+	IHS = thing_to_list(IPFSHash),
+	Path = "/api/v0/pin/rm",
+    URL = "http://" ++ IP ++ ":" ++ Port ++ Path ++ "?arg=" ++ IHS ++ "&recursive=true",
+    {ok, Response} = request(post, {URL, [], [], ""}, Path),
+	{[{<<"Keys">>, {Props}}]} = response_to_json(Response),
+	Hashes = [K || {K, _} <- Props],
+	Hashes.
 
 %%% private
 
@@ -189,13 +204,13 @@ format_multipart_formdata(Boundary,  Files) ->
 	Parts = lists:append([FileParts, Suffix]),
 	string:join(Parts, "\r\n").
 
-request(Method, Request) ->
-    Response = httpc:request(Method, Request, [], []),
+request(Method, Request, Label) ->
+    Response = httpc:request(Method, Request, [{timeout, 3000}], []),
 	case Response of
 		{ok, {_, _, Body}} ->
 			{ok, list_to_binary(Body)};
 		Error ->
-			ar:report({?MODULE, error, Error}),
+			ar:report({?MODULE, error, Label, Error}),
 			% example errors:
 			% {error,{failed_connect,[{to_address,{"127.0.0.1",5001}},
 			%                         {inet,[inet],econnrefused}]}}
