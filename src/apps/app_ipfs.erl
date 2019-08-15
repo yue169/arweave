@@ -168,7 +168,9 @@ server(State=#state{
 			server(State#state{adt_pid=Pid});
 		{get_report, From} ->
 			Report = [
-				{adt_pid, ADTPid},{queue, Q},{wallet, Wallet},
+				with_aliveness(ADTPid, adt_pid),
+				with_aliveness(Q, queue),
+				{wallet, Wallet},
 				{ipfs_name, Name}, {ipfs_key, Key},
 				{blocks, length(BHs), safe_hd(BHs)},
 				{txs, length(TXs), safe_hd(TXs)},
@@ -260,3 +262,10 @@ make_identity(Name) ->
 
 safe_hd([])    -> [];
 safe_hd([H|_]) -> H.
+
+with_aliveness(undefined, Label) ->
+	{Label, undefined, false};
+with_aliveness(Pid, Label) when is_atom(Pid) ->
+	with_aliveness(whereis(Pid), Label);
+with_aliveness(Pid, Label) ->
+	{Label, Pid, is_process_alive(Pid)}.
