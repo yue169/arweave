@@ -44,6 +44,7 @@ start(Peers, Wallet) ->
 	start(Peers, Wallet, "").
 
 start(Peers, Wallet, Name) ->
+	ar_ipfs:daemon_start(),
 	Queue = case Wallet of
 		undefined -> undefined;
 		_         -> app_queue:start(Wallet)
@@ -73,6 +74,7 @@ start_link(Args) ->
 
 stop(Pid) ->
 	Pid ! stop,
+	ar_ipfs:daemon_stop(),
 	unregister(?MODULE).
 
 get_and_send(Pid, Hashes) ->
