@@ -27,7 +27,7 @@ runs_while_daemon_down_test_() ->
 % not_sending_already_got_test_() ->
 % 	{timeout, 60, fun() ->
 % 		{_, IPFSPid} = setup(),
-% 		{HashTups, _} = ar_ipfs:ep_get_ipfs_hashes(3, 123),
+% 		{HashTups, _} = app_ipfs_utils:ep_get_ipfs_hashes(3, 123),
 % 		Hashes = ar_ipfs:hashes_only(HashTups),
 % 		ar:d({here, Hashes}),
 % 		app_ipfs:get_and_send(app_ipfs, Hashes),
@@ -134,6 +134,12 @@ timestamp_data(TS, Data) ->
 % 			TS
 % 		end,
 % 		lists:seq(1,N)).
+
+% hashes_only(HashTups) ->
+% 	lists:flatten(lists:map(fun
+% 		({_,H,<<>>}) -> H;
+% 		({_,H,P})    -> [H,P]
+% 	end, HashTups)).
 
 % ipfs_hashes_to_data(Pid) ->
 % 	lists:map(fun(Hash) ->

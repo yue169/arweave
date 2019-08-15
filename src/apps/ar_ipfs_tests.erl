@@ -27,7 +27,7 @@ get_everipedia_hashes_test_() ->
 		timer:sleep(1000),
 		N = 6,
 		From = 240,
-		{Hashes, _More} = ar_ipfs:ep_get_ipfs_hashes(N, From),
+		{Hashes, _More} = app_ipfs_utils:ep_get_ipfs_hashes(N, From),
 		lists:foreach(fun(H) -> io:format("Hash: ~p~n", [H]) end, Hashes),
 		ar_ipfs:daemon_stop(),
 		?assertEqual(N, length(Hashes))

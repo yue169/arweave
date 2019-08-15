@@ -7,7 +7,6 @@
 -export([key_gen/1, key_gen/3]).
 -export([pin_ls/0, pin_ls/2]).
 -export([pin_rm/1, pin_rm/3]).
--export([ep_get_ipfs_hashes/2, hashes_only/1]).
 -export([rfc3339_timestamp/0, rfc3339_timestamp/1]).
 
 -define(BOUNDARY, "------------qwerasdfzxcv").
@@ -45,38 +44,6 @@ daemon_stop(IP, Port) ->
     URL = "http://" ++ IP ++ ":" ++ Port ++ Path,
     {ok, _} = request(post, {URL, [], "", ""}, Path).
 
-ep_get_ipfs_hashes(N, From) ->
-	{ok, _} = application:ensure_all_started(ssl),
-	URL = "https://mainnet.libertyblock.io:7777/v1/chain/get_table_rows",
-	Headers = [],
-	ContentType = [],
-	ReqProps = [
-		{scope, <<"eparticlectr">>},
-		{code, <<"eparticlectr">>},
-		{table, <<"wikistbl">>},
-		{json, true},
-		{lower_bound, From},
-		{limit, N}
-	],
-	Body = jiffy:encode({ReqProps}),
-	{ok, Response} = request(post, {URL, Headers, ContentType, Body}, "ep_get_ipfs_hashes"),
-	{RespProps} = response_to_json(Response),
-	MaybeMore = case lists:keyfind(<<"more">>, 1, RespProps) of
-		{<<"more">>, More} -> More;
-		false              -> false
-	end,
-	HashTups = case lists:keyfind(<<"rows">>, 1, RespProps) of
-		false              -> [];
-		{<<"rows">>, Rows} -> lists:map(fun row_to_hash_tup/1, Rows)
-	end,
-	{HashTups, MaybeMore}.
-
-hashes_only(HashTups) ->
-	lists:flatten(lists:map(fun
-		({_,H,<<>>}) -> H;
-		({_,H,P})    -> [H,P]
-	end, HashTups)).
-
 rfc3339_timestamp() ->
 	rfc3339_timestamp({utc, calendar:universal_time()}).
 
@@ -88,14 +55,6 @@ rfc3339_timestamp({utc, UTCDateTime}) ->
 			[Year, Month, Day, Hours, Min, Sec]
 		)
 	).
-
-row_to_hash_tup({Props}) ->
-	case lists:sort(Props) of
-		[{<<"hash">>, Hash},{<<"id">>, Id},{<<"parent_hash">>, PHash}] ->
-			{Id, Hash, PHash};
-		_ ->
-			{none, <<>>, <<>>}
-	end.
 
 add_data(Data, Filename) ->
 	add_data(?IPFS_HOST, ?IPFS_PORT, Data, Filename).
