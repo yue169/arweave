@@ -5,12 +5,13 @@
 	stop/1,
 	get_and_send/2,
 	bulk_get_and_send/2, bulk_get_and_send_from_file/2,
-	get_block_hashes/1, get_txs/1, get_ipfs_hashes/1,
+	get_txs/1,
 	get_local_ipfs_txs/0, add_local_ipfs_tx_data/0, add_local_ipfs_tx_data/1,
 	ipfs_hash_status/1,
 	maybe_ipfs_add_txs/1,
 	report/1]).
--export([confirmed_transaction/2]).
+-export([confirmed_transaction/2]). % for adt_simple
+-export([add_ipfs_data/2, pinned/3]). % spawned from server
 -include("../ar.hrl").
 
 -ifdef(DEBUG).
@@ -25,8 +26,6 @@
 	queue,
 	ipfs_name,
 	ipfs_key,
-	block_hashes = [],
-	ipfs_hashes = [],
 	txs = []
 }).
 
@@ -98,12 +97,6 @@ bulk_get_and_send_from_file(Pid, Filename) ->
 	{ok, Hashes} = file:consult(Filename),
 	bulk_get_and_send(Pid, Hashes).
 
-get_block_hashes(Pid) ->
-	get_x(Pid, get_block_hashes, block_hashes).
-
-get_ipfs_hashes(Pid) ->
-	get_x(Pid, get_ipfs_hashes, ipfs_hashes).
-
 get_txs(Pid) ->
 	get_x(Pid, get_txs, txs).
 
@@ -144,6 +137,11 @@ maybe_ipfs_add_txs(TXs) ->
 			end
 	end.
 
+pinned(undefined, _, _) -> ok;
+pinned(Pid, TXidEnc, IPFSHash) ->
+	Pid ! {pinned, TXidEnc, IPFSHash}.
+	
+
 report(Pid) ->
 	get_x(Pid, get_report, report).
 
@@ -159,7 +157,7 @@ confirmed_transaction(Pid, TX) ->
 server(State=#state{
 			adt_pid=ADTPid, queue=Q, wallet=Wallet,
 			ipfs_name=Name, ipfs_key=Key,
-			block_hashes=BHs, ipfs_hashes=IHs, txs=TXs}) ->
+			txs=TXs}) ->
 	receive
 		stop ->
 			State#state.adt_pid ! stop,
@@ -172,16 +170,8 @@ server(State=#state{
 				with_aliveness(Q, queue),
 				{wallet, Wallet},
 				{ipfs_name, Name}, {ipfs_key, Key},
-				{blocks, length(BHs), safe_hd(BHs)},
-				{txs, length(TXs), safe_hd(TXs)},
-				{ipfs_hashes, length(IHs), safe_hd(IHs)}],
+				{txs, length(TXs), safe_hd(TXs)}],
 			From ! {report, Report},
-			server(State);
-		{get_block_hashes, From} ->
-			From ! {block_hashes, BHs},
-			server(State);
-		{get_ipfs_hashes, From} ->
-			From ! {ipfs_hashes, IHs},
 			server(State);
 		{get_txs, From} ->
 			From ! {txs, TXs},
@@ -189,25 +179,20 @@ server(State=#state{
 		{get_queue, From} ->
 			From ! {queue, Q},
 			server(State);
+		{pinned, TXidEnc, IPFSHash} ->
+			server(State#state{txs=maybe_append_tx(TXs, {TXidEnc, IPFSHash})});
 		{queue_tx, UnsignedTX} ->
 			app_queue:add(Q, UnsignedTX),
 			server(State);
 		{recv_new_tx, TX=#tx{tags=Tags, id=ID}} ->
 			ar:report({?MODULE, recv_new_tx, ar_util:encode(ID)}),
-			NewState =
-				case lists:keyfind(<<"IPFS-Add">>, 1, Tags) of
-					{<<"IPFS-Add">>, Hash} ->
-						case add_ipfs_data(TX, Hash) of
-							{ok,_} ->
-								spawn(ar_ipfs, dht_provide_hash, [Hash]),
-								State#state{txs=maybe_append_tx(TXs, {ar_util:encode(ID), Hash})};
-							{error,_} ->
-								State
-						end;
-					false ->
-						State
-				end,
-			server(NewState);
+			case lists:keyfind(<<"IPFS-Add">>, 1, Tags) of
+				{<<"IPFS-Add">>, Hash} ->
+					spawn(?MODULE, add_ipfs_data, [TX, Hash]);
+				false ->
+					pass
+			end,
+			server(State);
 		{recv_new_tx, X} ->
 			ar:report({?MODULE, recv_new_tx, X}),
 			server(State)
@@ -216,9 +201,18 @@ server(State=#state{
 %%% private functions
 
 add_ipfs_data(TX, Hash) ->
-	%% version 0.1, no validation
-	ar:d({recv_tx_ipfs_add, ar_util:encode(TX#tx.id), Hash}),
-	ar_ipfs:add_data(TX#tx.data, Hash).
+	add_ipfs_data(TX, Hash, undefined).
+add_ipfs_data(TX, Hash, From) ->
+	TXide = ar_util:encode(TX#tx.id),
+	ar:d({recv_tx_ipfs_add, TXide, Hash}),
+	case ar_ipfs:add_data(TX#tx.data, Hash) of
+		{ok, Response} ->
+			?MODULE:pinned(From, TXide, Hash),
+			spawn(ar_ipfs, dht_provide_hash, [Hash]),
+			{ok, Response};
+		{error, Reason} ->
+			{error, Reason}
+	end.
 
 maybe_append_tx(TXs, TX) ->
 	case lists:member(TX, TXs) of
