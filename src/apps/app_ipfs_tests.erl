@@ -8,6 +8,7 @@ runs_while_daemon_down_test_() ->
 		true = ar_ipfs:daemon_is_running(),
 		TXid1 = send_ipfs_tx_mine_block(Node, Wallet, <<>>),
 		TXid1e = ar_util:encode(TXid1),
+		wait_till_msg_q_empty(),
 		[{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
 		ar:report({?MODULE, ipfs_daemon_stop}),
 		{ok, _Response} = ar_ipfs:daemon_stop(),
@@ -77,8 +78,7 @@ send_tx_mine_block(Node, TX) ->
 	ok.
 
 closedown(IPFSPid) ->
-	app_ipfs:stop(IPFSPid),
-	ar_ipfs:daemon_stop().
+	app_ipfs:stop(IPFSPid).
 
 numbered_fn(N) ->
 	NB = integer_to_binary(N),
@@ -90,6 +90,15 @@ tag_tx(TX, Tags) ->
 timestamp_data(TS, Data) ->
 	<<TS/binary, "  *  ", Data/binary>>.
 
+wait_till_msg_q_empty() ->
+	timer:sleep(1000),
+	PI = process_info(whereis(app_ipfs)),
+	{_, MQL} = lists:keyfind(message_queue_len, 1, PI),
+	ar:report({app_ipfs, message_queue_len, MQL}),
+	case MQL =:= 0 of
+		true  -> ok;
+		false -> wait_till_msg_q_empty()
+	end.
 
 % mine_n_blocks_on_node(N, Node) ->
 % 	lists:foreach(fun(_) ->

@@ -11,7 +11,7 @@
 	maybe_ipfs_add_txs/1,
 	report/1]).
 -export([confirmed_transaction/2]). % for adt_simple
--export([add_ipfs_data/2, pinned/3]). % spawned from server
+-export([add_ipfs_data/2, add_ipfs_data/3, pinned/3]). % spawned from server
 -include("../ar.hrl").
 
 -ifdef(DEBUG).
@@ -73,8 +73,7 @@ start_link(Args) ->
 
 stop(Pid) ->
 	Pid ! stop,
-	ar_ipfs:daemon_stop(),
-	unregister(?MODULE).
+	ar_ipfs:daemon_stop().
 
 get_and_send(Pid, Hashes) ->
 	Pins = ar_ipfs:pin_ls(),
@@ -137,7 +136,8 @@ maybe_ipfs_add_txs(TXs) ->
 			end
 	end.
 
-pinned(undefined, _, _) -> ok;
+pinned(undefined, T, H) ->
+	ok;
 pinned(Pid, TXidEnc, IPFSHash) ->
 	Pid ! {pinned, TXidEnc, IPFSHash}.
 	
@@ -188,7 +188,7 @@ server(State=#state{
 			ar:report({?MODULE, recv_new_tx, ar_util:encode(ID)}),
 			case lists:keyfind(<<"IPFS-Add">>, 1, Tags) of
 				{<<"IPFS-Add">>, Hash} ->
-					spawn(?MODULE, add_ipfs_data, [TX, Hash]);
+					spawn(?MODULE, add_ipfs_data, [TX, Hash, self()]);
 				false ->
 					pass
 			end,

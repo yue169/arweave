@@ -46,8 +46,8 @@ ep_get_ipfs_hashes(N, From) ->
 		{limit, N}
 	],
 	Body = jiffy:encode({ReqProps}),
-	{ok, {_, _, Body}} = httpc:request(post, {URL, Headers, ContentType, Body}, [], []),
-	Response = list_to_binary(Body),
+	{ok, {_, _, RespBin}} = httpc:request(post, {URL, Headers, ContentType, Body}, [], []),
+	Response = list_to_binary(RespBin),
 	{RespProps} = jiffy:decode(Response),
 	MaybeMore = case lists:keyfind(<<"more">>, 1, RespProps) of
 		{<<"more">>, More} -> More;

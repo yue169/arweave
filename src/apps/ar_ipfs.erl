@@ -143,9 +143,9 @@ pin_rm(IP, Port, IPFSHash) ->
 	Path = "/api/v0/pin/rm",
     URL = "http://" ++ IP ++ ":" ++ Port ++ Path ++ "?arg=" ++ IHS ++ "&recursive=true",
     {ok, Response} = request(post, {URL, [], [], ""}, Path),
-	{[{<<"Keys">>, {Props}}]} = response_to_json(Response),
-	Hashes = [K || {K, _} <- Props],
-	Hashes.
+	%{[{<<"Pins">>, {Props}}]} = response_to_json(Response),
+	%Hashes = [K || {K, _} <- Props],
+	ok.
 
 %%% private
 
