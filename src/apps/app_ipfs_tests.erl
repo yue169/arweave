@@ -4,6 +4,7 @@
 
 runs_while_daemon_down_test_() ->
 	{timeout, 60, fun() ->
+		ar:report({app_ipfs_tests, runs_while_daemon_down_test, start}),
 		{Node, Wallet, IPFSPid} = setup(),
 		true = ar_ipfs:daemon_is_running(),
 		TXid1 = send_ipfs_tx_mine_blocks(Node, Wallet, <<>>),
@@ -13,7 +14,7 @@ runs_while_daemon_down_test_() ->
 		ar:report({app_ipfs_tests, report, app_ipfs:report(app_ipfs)}),
 		[{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
 		ar:report({app_ipfs_tests, ipfs_daemon_stop}),
-		{ok, _Response} = ar_ipfs:daemon_stop(),
+		ok = ar_ipfs:daemon_stop(),
 		timer:sleep(1000),
 		false = ar_ipfs:daemon_is_running(),
 		TXid2 = send_ipfs_tx_mine_blocks(Node, Wallet, TXid1),

@@ -1,5 +1,5 @@
 -module(ar_ipfs).
--export([daemon_is_running/0, daemon_start/0, daemon_stop/0, daemon_stop/2]).
+-export([daemon_is_running/0, daemon_start/0, daemon_stop/0, daemon_stop/1, daemon_stop/2]).
 -export([add_data/2, add_data/4, add_file/1, add_file/3]).
 -export([cat_data_by_hash/1, cat_data_by_hash/3]).
 -export([config_get_identity/0, config_set_identity/1]).
@@ -37,8 +37,13 @@ daemon_start() ->
 	end.
 
 daemon_stop() ->
-	os:cmd("ipfs shutdown").
-	%daemon_stop(?IPFS_HOST, ?IPFS_PORT).
+	daemon_stop(cli).
+
+daemon_stop(cli) ->
+	os:cmd("ipfs shutdown"),
+	ok;
+daemon_stop(http) ->
+	daemon_stop(?IPFS_HOST, ?IPFS_PORT).
 
 daemon_stop(IP, Port) ->
 	Path = "/api/v0/shutdown",
