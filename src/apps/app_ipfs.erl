@@ -204,6 +204,12 @@ server(State=#state{
 add_ipfs_data(TX, Hash) ->
 	add_ipfs_data(TX, Hash, undefined).
 add_ipfs_data(TX, Hash, From) ->
+	case lists:member(Hash, ar_ipfs:pin_ls()) of
+		true  -> ok;
+		false -> really_add_ipfs_data(TX, Hash, From)
+	end.
+
+really_add_ipfs_data(TX, Hash, From) ->
 	TXide = ar_util:encode(TX#tx.id),
 	ar:d({recv_tx_ipfs_add, TXide, Hash}),
 	case ar_ipfs:add_data(TX#tx.data, Hash) of
