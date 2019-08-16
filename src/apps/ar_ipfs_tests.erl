@@ -4,9 +4,31 @@
 
 -export([timestamp_data/1]).
 
+pin_ls_cli_test() ->
+	ar_ipfs:daemon_start(),
+	PinsHTTP = lists:sort(ar_ipfs:pin_ls()),
+	PinsCLI  = lists:sort(ar_ipfs:pin_ls(cli)),
+	ar_ipfs:daemon_stop(),
+	?assertEqual(PinsHTTP, PinsCLI).
+
+pin_rm_cli_test() ->
+	ar_ipfs:daemon_start(),
+	Filename = "known_local.txt",
+	DataDir = "src/apps/app_ipfs_test_data/",
+	Path = DataDir ++ Filename,
+	{ok, Data} = file:read_file(Path),
+	DataToHash = timestamp_data(Data),
+	{ok, Hash} = ar_ipfs:add_data(DataToHash, Filename),
+	Pins1 = ar_ipfs:pin_ls(cli),
+	ok = ar_ipfs:pin_rm(cli, Hash),
+	timer:sleep(1000),
+	Pins2 = ar_ipfs:pin_ls(cli),
+	ar_ipfs:daemon_stop(),
+	?assert(lists:member(Hash, Pins1)),
+	?assertNot(lists:member(Hash, Pins2)).
+
 pin_rm_test() ->
 	ar_ipfs:daemon_start(),
-	timer:sleep(1000),
 	Filename = "known_local.txt",
 	DataDir = "src/apps/app_ipfs_test_data/",
 	Path = DataDir ++ Filename,
@@ -24,7 +46,6 @@ pin_rm_test() ->
 get_everipedia_hashes_test_() ->
 	{timeout, 60, fun() ->
 		ar_ipfs:daemon_start(),
-		timer:sleep(1000),
 		N = 6,
 		From = 240,
 		{Hashes, _More} = app_ipfs_utils:ep_get_ipfs_hashes(N, From),
@@ -35,7 +56,6 @@ get_everipedia_hashes_test_() ->
 
 add_local_and_get_test() ->
 	ar_ipfs:daemon_start(),
-	timer:sleep(1000),
 	Filename = "known_local.txt",
 	DataDir = "src/apps/app_ipfs_test_data/",
 	Path = DataDir ++ Filename,

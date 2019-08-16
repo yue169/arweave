@@ -3,10 +3,10 @@
 -export([add_data/2, add_data/4, add_file/1, add_file/3]).
 -export([cat_data_by_hash/1, cat_data_by_hash/3]).
 -export([config_get_identity/0, config_set_identity/1]).
--export([dht_provide_hash/1, dht_provide_hash/3]).
+-export([dht_provide_hash/1, dht_provide_hash/2, dht_provide_hash/3]).
 -export([key_gen/1, key_gen/3]).
--export([pin_ls/0, pin_ls/2]).
--export([pin_rm/1, pin_rm/3]).
+-export([pin_ls/0, pin_ls/1, pin_ls/2]).
+-export([pin_rm/1, pin_rm/2, pin_rm/3]).
 -export([rfc3339_timestamp/0, rfc3339_timestamp/1]).
 
 -define(BOUNDARY, "------------qwerasdfzxcv").
@@ -32,12 +32,13 @@ daemon_start() ->
 		true -> ok;
 		false  ->
 			spawn(os, cmd, ["ipfs daemon"]),
-			timer:sleep(2000),
+			timer:sleep(3000),
 			ok
 	end.
 
 daemon_stop() ->
-	daemon_stop(?IPFS_HOST, ?IPFS_PORT).
+	os:cmd("ipfs shutdown").
+	%daemon_stop(?IPFS_HOST, ?IPFS_PORT).
 
 daemon_stop(IP, Port) ->
 	Path = "/api/v0/shutdown",
@@ -102,6 +103,11 @@ config_set_identity(Key) ->
 	ok.
 
 dht_provide_hash(IPFSHash) ->
+	dht_provide_hash(cli, IPFSHash).
+
+dht_provide_hash(cli, IPFSHash) ->
+	spawn(os, cmd, ["ipfs dht provide " ++ thing_to_list(IPFSHash)]);
+dht_provide_hash(http, IPFSHash) ->
 	dht_provide_hash(?IPFS_HOST, ?IPFS_PORT, IPFSHash).
 
 dht_provide_hash(IP, Port, IPFSHash) ->
@@ -125,6 +131,19 @@ key_gen(IP, Port, Name) ->
 	end.
 
 pin_ls() ->
+	pin_ls(cli).
+
+pin_ls(cli) ->
+	Raw = os:cmd("ipfs pin ls"),
+	Rows = string:split(Raw, "\n", all),
+	lists:foldl(fun(Row, Acc) ->
+		 case string:split(Row, " ", all) of
+			[""|_] -> Acc;
+			[H |_] -> [list_to_binary(H)|Acc];
+			_      -> Acc
+		end
+	end, [], Rows);
+pin_ls(http) ->
 	pin_ls(?IPFS_HOST, ?IPFS_PORT).
 
 pin_ls(IP, Port) ->
@@ -136,13 +155,22 @@ pin_ls(IP, Port) ->
 	Hashes.
 
 pin_rm(IPFSHash) ->
+	pin_rm(cli, IPFSHash).
+
+pin_rm(cli, IPFSHash) ->
+	Raw = os:cmd("ipfs pin rm " ++ thing_to_list(IPFSHash)),
+	case string:split(Raw, " ") of
+		["unpinned"|_] -> ok;
+		Message -> {error, Message}
+	end;
+pin_rm(http, IPFSHash) ->
 	pin_rm(?IPFS_HOST, ?IPFS_PORT, IPFSHash).
 
 pin_rm(IP, Port, IPFSHash) ->
 	IHS = thing_to_list(IPFSHash),
 	Path = "/api/v0/pin/rm",
     URL = "http://" ++ IP ++ ":" ++ Port ++ Path ++ "?arg=" ++ IHS ++ "&recursive=true",
-    {ok, Response} = request(post, {URL, [], [], ""}, Path),
+    {ok, _Response} = request(post, {URL, [], [], ""}, Path),
 	%{[{<<"Pins">>, {Props}}]} = response_to_json(Response),
 	%Hashes = [K || {K, _} <- Props],
 	ok.

@@ -91,10 +91,10 @@ timestamp_data(TS, Data) ->
 	<<TS/binary, "  *  ", Data/binary>>.
 
 wait_till_msg_q_empty() ->
-	timer:sleep(1000),
 	PI = process_info(whereis(app_ipfs)),
 	{_, MQL} = lists:keyfind(message_queue_len, 1, PI),
 	ar:report({app_ipfs, message_queue_len, MQL}),
+	timer:sleep(1000),
 	case MQL =:= 0 of
 		true  -> ok;
 		false -> wait_till_msg_q_empty()
