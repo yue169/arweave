@@ -6,20 +6,22 @@ runs_while_daemon_down_test_() ->
 	{timeout, 60, fun() ->
 		{Node, Wallet, IPFSPid} = setup(),
 		true = ar_ipfs:daemon_is_running(),
-		TXid1 = send_ipfs_tx_mine_block(Node, Wallet, <<>>),
+		TXid1 = send_ipfs_tx_mine_blocks(Node, Wallet, <<>>),
 		TXid1e = ar_util:encode(TXid1),
 		wait_till_msg_q_empty(),
+		[_|_] = app_ipfs:report(app_ipfs),
+		ar:report({app_ipfs_tests, report, app_ipfs:report(app_ipfs)}),
 		[{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
-		ar:report({?MODULE, ipfs_daemon_stop}),
+		ar:report({app_ipfs_tests, ipfs_daemon_stop}),
 		{ok, _Response} = ar_ipfs:daemon_stop(),
 		timer:sleep(1000),
 		false = ar_ipfs:daemon_is_running(),
-		TXid2 = send_ipfs_tx_mine_block(Node, Wallet, TXid1),
+		TXid2 = send_ipfs_tx_mine_blocks(Node, Wallet, TXid1),
 		[{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
 		ok = ar_ipfs:daemon_start(),
-		ar:report({?MODULE, ipfs_daemon_start}),
+		ar:report({app_ipfs_tests, ipfs_daemon_start}),
 		true = ar_ipfs:daemon_is_running(),
-		TXid3 = send_ipfs_tx_mine_block(Node, Wallet, TXid2),
+		TXid3 = send_ipfs_tx_mine_blocks(Node, Wallet, TXid2),
 		TXid3e = ar_util:encode(TXid3),
 		[{TXid3e,_},{TXid1e, Label}] = app_ipfs:get_txs(IPFSPid),
 		closedown(IPFSPid)
@@ -59,7 +61,7 @@ prepare_tx_adder(Node) ->
 	ar_http_iface_server:reregister(http_bridge_node, Bridge),
 	ar_node:add_peers(Node, Bridge).
 
-send_ipfs_tx_mine_block(Node, Wallet, LastTX) ->
+send_ipfs_tx_mine_blocks(Node, Wallet, LastTX) ->
 	TS = ar_ipfs:rfc3339_timestamp(),
 	Filename = <<"testdata.txt">>,
 	Data = timestamp_data(TS, <<"Data">>),
@@ -67,22 +69,18 @@ send_ipfs_tx_mine_block(Node, Wallet, LastTX) ->
 	Reward = ?AR(1),
 	TX = tag_tx(ar_tx:new(Data, Reward, LastTX), Tags),
 	STX = ar_tx:sign(TX, Wallet),
-	send_tx_mine_block(Node, STX),
+	send_tx_mine_blocks(Node, STX),
 	STX#tx.id.
 
-send_tx_mine_block(Node, TX) ->
+send_tx_mine_blocks(Node, TX) ->
 	ar_node:add_tx(Node, TX),
-	timer:sleep(1000),
+	timer:sleep(2000),
 	ar_node:mine(Node),
-	timer:sleep(1000),
+	timer:sleep(2000),
 	ok.
 
 closedown(IPFSPid) ->
 	app_ipfs:stop(IPFSPid).
-
-numbered_fn(N) ->
-	NB = integer_to_binary(N),
-	<<"testdata-", NB/binary, ".txt">>.
 
 tag_tx(TX, Tags) ->
 	TX#tx{tags=Tags}.
@@ -143,6 +141,10 @@ wait_till_msg_q_empty() ->
 % 			TS
 % 		end,
 % 		lists:seq(1,N)).
+
+% numbered_fn(N) ->
+% 	NB = integer_to_binary(N),
+% 	<<"testdata-", NB/binary, ".txt">>.
 
 % hashes_only(HashTups) ->
 % 	lists:flatten(lists:map(fun

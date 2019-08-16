@@ -136,7 +136,7 @@ maybe_ipfs_add_txs(TXs) ->
 			end
 	end.
 
-pinned(undefined, T, H) ->
+pinned(undefined, _, _) ->
 	ok;
 pinned(Pid, TXidEnc, IPFSHash) ->
 	Pid ! {pinned, TXidEnc, IPFSHash}.
@@ -180,12 +180,13 @@ server(State=#state{
 			From ! {queue, Q},
 			server(State);
 		{pinned, TXidEnc, IPFSHash} ->
+			ar:report({app_ipfs, pinned, TXidEnc, IPFSHash}),
 			server(State#state{txs=maybe_append_tx(TXs, {TXidEnc, IPFSHash})});
 		{queue_tx, UnsignedTX} ->
 			app_queue:add(Q, UnsignedTX),
 			server(State);
 		{recv_new_tx, TX=#tx{tags=Tags, id=ID}} ->
-			ar:report({?MODULE, recv_new_tx, ar_util:encode(ID)}),
+			ar:report({app_ipfs, recv_new_tx, ar_util:encode(ID)}),
 			case lists:keyfind(<<"IPFS-Add">>, 1, Tags) of
 				{<<"IPFS-Add">>, Hash} ->
 					spawn(?MODULE, add_ipfs_data, [TX, Hash, self()]);
@@ -194,7 +195,7 @@ server(State=#state{
 			end,
 			server(State);
 		{recv_new_tx, X} ->
-			ar:report({?MODULE, recv_new_tx, X}),
+			ar:report({app_ipfs, recv_new_tx, X}),
 			server(State)
 	end.
 

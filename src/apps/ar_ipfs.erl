@@ -192,16 +192,18 @@ format_multipart_formdata(Boundary,  Files) ->
 	string:join(Parts, "\r\n").
 
 request(Method, Request, Label) ->
+	request(Method, Request, Label, 3).
+
+request(_, _, _, 0) ->
+	{error, three_repeated_errors};
+request(Method, Request, Label, N) ->
     Response = httpc:request(Method, Request, [{timeout, 3000}], []),
 	case Response of
 		{ok, {_, _, Body}} ->
 			{ok, list_to_binary(Body)};
 		Error ->
 			ar:report({?MODULE, error, Label, Error}),
-			% example errors:
-			% {error,{failed_connect,[{to_address,{"127.0.0.1",5001}},
-			%                         {inet,[inet],econnrefused}]}}
-			{error, Error}
+			request(Method, Request, Label, N-1)
 	end.
 
 response_to_json(Response) ->

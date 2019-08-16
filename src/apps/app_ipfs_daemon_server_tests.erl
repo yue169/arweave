@@ -23,14 +23,14 @@ all_ok_test() ->
 ignore_second_test_() ->
 	{timeout, 60, fun() ->
 		ar_storage:clear(),
-		[B0] = ar_weave:init([]),
+		{K, W} = init_kqw(),
+		[B0] = ar_weave:init([{ar_wallet:to_address(W), ?AR(1000), <<>>}]),
 		Node = ar_node:start([], [B0]),
 		ar_http_iface_server:reregister(Node),
 		Bridge = ar_bridge:start([], Node, ?DEFAULT_HTTP_IFACE_PORT),
 		ar_http_iface_server:reregister(http_bridge_node, Bridge),
 		ar_node:add_peers(Node, Bridge),
 
-		{K, _W} = init_kqw(),
 		H = make_new_ipfs_hash(),
 		{ok, {{Status1, _}, _, Body1, _, _}} = send_request(getsend, {K, H}),
 
