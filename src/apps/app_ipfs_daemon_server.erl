@@ -508,7 +508,8 @@ sufficient_funds(_, _) -> ok.
 -else.
 sufficient_funds(Wallet, DataSize) ->
 	Diff = ar_node:get_current_diff(whereis(http_entrypoint_node)),
-	Cost = ar_tx:calculate_min_tx_cost(DataSize, Diff),
+	Height = ar_node:get_height(whereis(http_entrypoint_node)),
+	Cost = ar_tx:calculate_min_tx_cost(DataSize, Diff, Height),
 	Balance = ar_node:get_balance(
 		whereis(http_entrypoint_node),
 		ar_wallet:to_address(Wallet)),
