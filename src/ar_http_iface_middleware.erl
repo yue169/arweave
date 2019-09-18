@@ -209,6 +209,17 @@ handle(<<"POST">>, [<<"arql">>], Req) ->
 			{400, #{}, <<"Invalid ARQL query.">>, Req}
 	end;
 
+handle(<<"POST">>, [<<"arql2">>], Req) ->
+	QueryJson = ar_http_req:body(Req),
+	case ar_serialize:json_struct_to_query(QueryJson) of
+		{ok, Query} ->
+			TXIDs = ar_util:unique(ar_arql2_db:eval(Query)),
+			Body = ar_serialize:jsonify(TXIDs),
+			{200, #{}, Body, Req};
+		{error, _} ->
+			{400, #{}, <<"Invalid ARQL query.">>, Req}
+	end;
+
 %% @doc Return the data field of the transaction specified via the transaction ID (hash) served as HTML.
 %% GET request to endpoint /tx/{hash}/data.html
 handle(<<"GET">>, [<<"tx">>, Hash, << "data.", _/binary >>], Req) ->

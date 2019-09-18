@@ -302,6 +302,7 @@ start(
 	inets:start(),
 	ar_tx_db:start(),
 	ar_key_db:start(),
+	ar_sqlite_sup:start_link(),
 	ar_miner_log:start(),
 	ar_tx_search:start(),
 	ar_storage:start_update_used_space(),
