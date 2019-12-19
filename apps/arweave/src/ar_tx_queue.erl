@@ -3,7 +3,7 @@
 
 %% API
 -export([start_link/0, stop/0]).
--export([set_max_emitters/1, set_max_size/1, set_pause/1]).
+-export([set_max_emitters/1, set_max_size/1, set_max_length/1, set_pause/1]).
 -export([add_tx/1, show_queue/0]).
 -export([utility/1]).
 
@@ -20,6 +20,7 @@
 	emitters_running,
 	max_emitters,
 	max_size,
+	max_length,
 	size,
 	paused,
 	emit_map
@@ -60,6 +61,9 @@ set_pause(PauseOrNot) ->
 set_max_size(Bytes) ->
 	gen_server:call(?MODULE, {set_max_size, Bytes}).
 
+set_max_length(Length) ->
+	gen_server:call(?MODULE, {set_max_length, Length}).
+
 set_max_emitters(N) ->
 	gen_server:call(?MODULE, {set_max_emitters, N}).
 
@@ -84,6 +88,7 @@ init([]) ->
 		emitters_running = 0,
 		max_emitters = MaxEmitters,
 		max_size = ?TX_QUEUE_SIZE_LIMIT,
+		max_length = ?TX_QUEUE_LENGTH_LIMIT,
 		size = 0,
 		paused = false,
 		emit_map = #{}
@@ -97,6 +102,9 @@ handle_call({set_max_emitters, N}, _From, State) ->
 
 handle_call({set_max_size, Bytes}, _From, State) ->
 	{reply, ok, State#state { max_size = Bytes }};
+
+handle_call({set_max_length, Length}, _From, State) ->
+	{reply, ok, State#state { max_length = Length }};
 
 handle_call(show_queue, _From, State = #state { tx_queue = Q }) ->
 	Reply = show_queue(Q),
@@ -117,14 +125,15 @@ handle_call(_Request, _From, State) ->
 	{noreply, State}.
 
 handle_cast({add_tx, TX}, State) ->
-	#state { tx_queue = Q, max_size = MaxSize, size = Size} = State,
+	#state { tx_queue = Q, max_size = MaxSize, max_length = MaxLength, size = Size} = State,
 	TXSize = ?TX_SIZE_BASE + byte_size(TX#tx.data),
 	U = utility(TX, TXSize),
 	{NewQ, NewSize, DroppedTXs} =
 		maybe_drop(
 			gb_sets:add_element({U, {TX, TXSize}}, Q),
 			Size + TXSize,
-			MaxSize
+			MaxSize,
+			MaxLength
 		),
 	case DroppedTXs of
 		[] ->
@@ -236,16 +245,28 @@ format_status(_Opt, Status) ->
 %%% Private functions.
 %%%===================================================================
 
-maybe_drop(Q, Size, MaxSize) ->
-	maybe_drop(Q, Size, MaxSize, []).
+maybe_drop(Q, Size, MaxSize, MaxLength) ->
+	{NewQ, NewSize, DroppedTXs} = maybe_drop_by_size(Q, Size, MaxSize, []),
+	maybe_drop_by_length(NewQ, NewSize, MaxLength, DroppedTXs).
 
-maybe_drop(Q, Size, MaxSize, DroppedTXs) ->
+%% @doc Drop the smallest entries that do not fit into the data size limit.
+maybe_drop_by_size(Q, Size, MaxSize, DroppedTXs) ->
 	case Size > MaxSize of
 		true ->
 			{{_, {TX, DroppedSize}}, NewQ} = gb_sets:take_smallest(Q),
-			maybe_drop(NewQ, Size - DroppedSize, MaxSize, [TX | DroppedTXs]);
+			maybe_drop_by_size(NewQ, Size - DroppedSize, MaxSize, [TX | DroppedTXs]);
 		false ->
-			{Q, Size, lists:filter(fun(TX) -> TX /= none end, DroppedTXs)}
+			{Q, Size, DroppedTXs}
+	end.
+
+%% @doc Drop the smallest entries that do not fit into the queue length limit.
+maybe_drop_by_length(Q, Size, MaxLength, DroppedTXs) ->
+	case gb_sets:size(Q) > MaxLength of
+		true ->
+			{{_, {TX, DroppedSize}}, NewQ} = gb_sets:take_smallest(Q),
+			maybe_drop_by_length(NewQ, Size - DroppedSize, MaxLength, [TX | DroppedTXs]);
+		false ->
+			{Q, Size, DroppedTXs}
 	end.
 
 show_queue(Q) ->

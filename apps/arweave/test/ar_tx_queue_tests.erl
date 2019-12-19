@@ -86,7 +86,15 @@ test_drop_lowest_priority_txs() ->
 		HighestPriorityTXs
 	),
 	Actual2 = [TXID || {[{_, TXID}, _, _]} <- http_get_queue()],
-	?assertEqual(encode_txs(HighestPriorityTXs), Actual2).
+	?assertEqual(encode_txs(HighestPriorityTXs), Actual2),
+	ar_tx_queue:set_max_length(1),
+	ar_http_iface_client:send_new_tx(
+		{127, 0, 0, 1, 1984},
+		ar_tx:new(<<"DATA1">>, ?AR(1))
+	),
+	TXsAfterDropByLength = [TXID || {[{_, TXID}, _, _]} <- http_get_queue()],
+	[HighestPriorityTX, _] = HighestPriorityTXs,
+	?assertEqual(encode_txs([HighestPriorityTX]), TXsAfterDropByLength).
 
 get_queue_endpoint_test_() ->
 	{timeout, 10, fun test_get_queue_endpoint/0}.

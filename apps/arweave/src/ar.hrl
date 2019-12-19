@@ -127,10 +127,15 @@
 %% @doc Byte size of the TX headers, tags allowance, etc.
 -define(TX_SIZE_BASE, 3210).
 
-%% @doc The mamimal size in bytes of the transaction queue.
+%% @doc The maximal size in bytes of the transaction queue.
 %% When the limit is reached, transactions with the lowest
 %% utility score are dropped from the queue.
 -define(TX_QUEUE_SIZE_LIMIT, 200 * 1024 * 1024).
+
+%% @doc The maximum number of transactions that should be held in the 
+%% distribution queue at any one time.
+%% 50000 = 50 (block anchor depth) * 1000 (max txs/block)
+-define(TX_QUEUE_LENGTH_LIMIT, 50000).
 
 -define(MAX_TX_ANCHOR_DEPTH, ?STORE_BLOCKS_BEHIND_CURRENT).
 
