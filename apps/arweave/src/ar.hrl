@@ -198,7 +198,7 @@
 -endif.
 
 %% @doc The number of the best peers to send new transactions to in parallel.
--define(TX_PROPAGATION_PARALLELIZATION, 5).
+-define(TX_PROPAGATION_PARALLELIZATION, 2).
 
 %% @doc The number of the best peers to send new blocks to in parallel.
 -define(BLOCK_PROPAGATION_PARALLELIZATION, 30).
@@ -237,7 +237,7 @@
 
 %% @doc Number of message emitter processes to spawn
 %% Each emitter process broadcasts TX or block messages to peers
--define(NUM_EMITTER_PROCESSES, 8).
+-define(NUM_EMITTER_PROCESSES, 2).
 
 %% @doc Target number of blocks per year.
 -define(BLOCK_PER_YEAR, (525600 / (?TARGET_TIME/60)) ).
