@@ -3,6 +3,7 @@
 -export([sign/2, sign/3, verify/5, verify_txs/5, signature_data_segment/1]).
 -export([tx_to_binary/1, tags_to_list/1]).
 -export([calculate_min_tx_cost/4, calculate_min_tx_cost/6, check_last_tx/2]).
+-export([generate_chunk_list/1]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -339,6 +340,26 @@ check_last_tx(WalletMap, TX) when is_map(WalletMap) ->
 	end.
 -endif.
 
+%% @doc Take a transaction with a data segment and generate its chunk list, placing
+%% this in the appropriate point in the transaction record.
+generate_chunk_list(TX) ->
+	ChunkIDs =
+		lists:map(
+			fun(Bin) ->
+				binary:part(hash_chunk(TX#tx.chunk_hash_alg, Bin), 0, TX#tx.chunk_hash_size)
+			 end,
+			ar:d(chunk_binary(?DATA_CHUNK_SIZE, TX#tx.data))
+		),
+	TX#tx { chunk_list = ChunkIDs }.
+
+hash_chunk(?DEFAULT_CHUNK_ALG, Bin) -> crypto:hash(sha256, Bin).
+
+chunk_binary(ChunkSize, Bin) when byte_size(Bin) < ChunkSize ->
+	[ Bin ];
+chunk_binary(ChunkSize, Bin) ->
+	<< ChunkBin:ChunkSize/binary, Rest/binary >> = Bin,
+	[ ChunkBin | chunk_binary(ChunkSize, Rest) ].
+
 %%% Tests: ar_tx
 
 %% @doc Ensure that a public and private key pair can be used to sign and verify data.
@@ -418,4 +439,22 @@ tx_cost_test() ->
 	?assertEqual(
 		calculate_min_tx_cost(Size, Diff, Height, Timestamp) + ?WALLET_GEN_FEE,
 		calculate_min_tx_cost(Size, Diff, Height, WalletList, Addr2, Timestamp)
+	).
+
+generate_tx_chunk_list_test() ->
+	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 1.5)),
+	TX =
+		#tx {
+			data = TXData,
+			chunk_hash_size = 3
+		},
+	Chunk1 = binary:part(TXData, 0, ?DATA_CHUNK_SIZE),
+	Chunk2 = binary:part(TXData, ?DATA_CHUNK_SIZE, trunc(?DATA_CHUNK_SIZE/2)),
+	ExpectedChunkID1 =
+		binary:part(crypto:hash(sha256, Chunk1), 0, 3),
+	ExpectedChunkID2 =
+		binary:part(crypto:hash(sha256, Chunk2), 0, 3),
+	?assertEqual(
+		[ExpectedChunkID1, ExpectedChunkID2],
+		(generate_chunk_list(TX))#tx.chunk_list
 	).
