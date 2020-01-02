@@ -290,6 +290,11 @@
 	target = <<>>, % Address of target of the tx.
 	quantity = 0, % Amount of Winston to send.
 	data = <<>>, % Data in transaction (if data transaction).
+	data_size = 0, % Size (in bytes) of the data used in transactions.
+	chunk_list = [], % The list of chunks associated with a transaction.
+	chunk_list_hash = <<>>, % The hash of all of the chunk IDs.
+	chunk_hash_alg = ?DEFAULT_CHUNK_ALG, % The hashing algorithm used to generate chunk IDs.
+	chunk_hash_size = ?DEFAULT_CHUNK_SIZE, % The size (in bytes) of chunk IDs in the TX.
 	signature = <<>>, % Transaction signature.
 	reward = 0 % Transaction mining reward.
 }).
