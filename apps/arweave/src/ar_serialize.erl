@@ -258,6 +258,7 @@ tx_safely_to_json_struct(TX) when is_binary(TX) ->
 tx_to_json_struct(
 	#tx {
 		id = ID,
+		format = Format,
 		last_tx = Last,
 		owner = Owner,
 		tags = Tags,
@@ -265,10 +266,16 @@ tx_to_json_struct(
 		quantity = Quantity,
 		data = Data,
 		reward = Reward,
-		signature = Sig
+		signature = Sig,
+		data_size = DataSize,
+		chunk_index = ChunkIndex,
+		chunk_index_hash = ChunkIndexHash,
+		chunk_hash_alg = ChunkHashAlg,
+		chunk_hash_size = ChunkHashSize
 	}) ->
 	{
 		[
+			{format, Format},
 			{id, ar_util:encode(ID)},
 			{last_tx, ar_util:encode(Last)},
 			{owner, ar_util:encode(Owner)},
@@ -288,6 +295,11 @@ tx_to_json_struct(
 			{target, ar_util:encode(Target)},
 			{quantity, integer_to_binary(Quantity)},
 			{data, ar_util:encode(Data)},
+			{data_size, integer_to_binary(DataSize)},
+			{chunk_index, lists:map(fun ar_util:encode/1, ChunkIndex)},
+			{chunk_index_hash, ar_util:encode(ChunkIndexHash)},
+			{chunk_hash_alg, ChunkHashAlg},
+			{chunk_hash_size, ChunkHashSize},
 			{reward, integer_to_binary(Reward)},
 			{signature, ar_util:encode(Sig)}
 		]
@@ -302,22 +314,41 @@ json_struct_to_tx({TXStruct}) ->
 		undefined -> [];
 		Xs -> Xs
 	end,
-	#tx {
-		id = ar_util:decode(find_value(<<"id">>, TXStruct)),
-		last_tx = ar_util:decode(find_value(<<"last_tx">>, TXStruct)),
-		owner = ar_util:decode(find_value(<<"owner">>, TXStruct)),
-		tags =
-			[
-					{ar_util:decode(Name), ar_util:decode(Value)}
-				||
-					{[{<<"name">>, Name}, {<<"value">>, Value}]} <- Tags
-			],
-		target = ar_util:decode(find_value(<<"target">>, TXStruct)),
-		quantity = binary_to_integer(find_value(<<"quantity">>, TXStruct)),
-		data = ar_util:decode(find_value(<<"data">>, TXStruct)),
-		reward = binary_to_integer(find_value(<<"reward">>, TXStruct)),
-		signature = ar_util:decode(find_value(<<"signature">>, TXStruct))
-	}.
+	BaseTX =
+		#tx {
+			format = 1,
+			id = ar_util:decode(find_value(<<"id">>, TXStruct)),
+			last_tx = ar_util:decode(find_value(<<"last_tx">>, TXStruct)),
+			owner = ar_util:decode(find_value(<<"owner">>, TXStruct)),
+			tags =
+				[
+						{ar_util:decode(Name), ar_util:decode(Value)}
+					||
+						{[{<<"name">>, Name}, {<<"value">>, Value}]} <- Tags
+				],
+			target = ar_util:decode(find_value(<<"target">>, TXStruct)),
+			quantity = binary_to_integer(find_value(<<"quantity">>, TXStruct)),
+			data = ar_util:decode(find_value(<<"data">>, TXStruct)),
+			reward = binary_to_integer(find_value(<<"reward">>, TXStruct)),
+			signature = ar_util:decode(find_value(<<"signature">>, TXStruct))
+		},
+	case find_value(<<"format">>, TXStruct) of
+		undefined -> BaseTX;
+		1 -> BaseTX;
+		2 ->
+			BaseTX#tx {
+				format = 2,
+				data_size = binary_to_integer(find_value(<<"data_size">>, TXStruct)),
+				chunk_index =
+					lists:map(
+						fun ar_util:decode/1,
+						find_value(<<"chunk_index">>, TXStruct)
+					),
+				chunk_index_hash = ar_util:decode(find_value(<<"chunk_index_hash">>, TXStruct)),
+				chunk_hash_alg = find_value(<<"chunk_hash_alg">>, TXStruct),
+				chunk_hash_size = find_value(<<"chunk_hash_size">>, TXStruct)
+			}
+	end.
 
 %% @doc Convert a wallet list into a JSON struct.
 wallet_list_to_json_struct([]) -> [];
@@ -422,9 +453,12 @@ full_block_roundtrip_test() ->
 %% @doc Convert a new TX into JSON and back, ensure the result is the same.
 tx_roundtrip_test() ->
 	TXBase = ar_tx:new(<<"test">>),
-	TX = TXBase#tx { tags = [{<<"Name1">>, <<"Value1">>}] },
+	TX = TXBase#tx { format = 2, tags = [{<<"Name1">>, <<"Value1">>}], chunk_hash_size = 10 },
 	JsonTX = jsonify(tx_to_json_struct(TX)),
-	TX = json_struct_to_tx(JsonTX).
+	?assertEqual(
+		TX,
+		json_struct_to_tx(JsonTX)
+	).
 
 wallet_list_roundtrip_test() ->
 	[B] = ar_weave:init(),
