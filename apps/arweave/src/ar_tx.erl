@@ -52,7 +52,7 @@ tx_to_binary(T) ->
 	>>.
 
 %% @doc Generate the data segment to be signed for a given TX.
-signature_data_segment(T) ->
+signature_data_segment(T) when T#tx.format == 1 ->
 	<<
 		(T#tx.owner)/binary,
 		(T#tx.target)/binary,
@@ -61,6 +61,20 @@ signature_data_segment(T) ->
 		(list_to_binary(integer_to_list(T#tx.reward)))/binary,
 		(T#tx.last_tx)/binary,
 		(tags_to_binary(T#tx.tags))/binary
+	>>;
+signature_data_segment(T) when T#tx.format == 2 ->
+	<<
+		(integer_to_binary(T#tx.format))/binary,
+		(T#tx.last_tx)/binary,
+		(T#tx.owner)/binary,
+		(tags_to_binary(T#tx.tags))/binary,
+		(T#tx.target)/binary,
+		(list_to_binary(integer_to_list(T#tx.quantity)))/binary,
+		(integer_to_binary(T#tx.data_size))/binary,
+		(T#tx.chunk_index_hash)/binary,
+		(list_to_binary(T#tx.chunk_hash_alg))/binary,
+		(integer_to_binary(T#tx.chunk_hash_size))/binary,
+		(list_to_binary(integer_to_list(T#tx.reward)))/binary
 	>>.
 
 %% @doc Cryptographicvally sign ('claim ownership') of a transaction.
@@ -388,6 +402,34 @@ sign_tx_test() ->
 			Diff,
 			Height,
 			[{ar_wallet:to_address(Pub), ?AR(20), <<>>}],
+			Timestamp
+		)
+	).
+
+sign_and_verify_chunked_test() ->
+	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 5.5)),
+	{Priv, Pub} = ar_wallet:new(),
+	UnsignedTX =
+		generate_chunk_index_hash(
+			generate_chunk_index(
+				#tx {
+					format = 2,
+					data = TXData,
+					data_size = byte_size(TXData),
+					reward = ?AR(100)
+				}
+			)
+		),
+	SignedTX = sign(UnsignedTX#tx { data = <<>> }, Priv, Pub),
+	Diff = 1,
+	Height = 0,
+	Timestamp = os:system_time(seconds),
+	?assert(
+		verify(
+			SignedTX,
+			Diff,
+			Height,
+			[{ar_wallet:to_address(Pub), ?AR(100), <<>>}],
 			Timestamp
 		)
 	).
