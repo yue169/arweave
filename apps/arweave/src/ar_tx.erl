@@ -360,6 +360,19 @@ chunk_binary(ChunkSize, Bin) ->
 	<< ChunkBin:ChunkSize/binary, Rest/binary >> = Bin,
 	[ ChunkBin | chunk_binary(ChunkSize, Rest) ].
 
+%% @doc Generate the chunk index hash for a given chunk index.
+generate_chunk_index_hash(TX) ->
+	% Sanity check that chunk hashes are of the appropriate length.
+	true =
+		lists:all(
+			fun(Hash) -> byte_size(Hash) == TX#tx.chunk_hash_size end,
+			TX#tx.chunk_index
+		),
+	% Generate the TX with the new chunk index hash.
+	TX#tx {
+		chunk_index_hash = crypto:hash(sha256, binary:list_to_bin(TX#tx.chunk_index))
+	}.
+
 %%% Tests: ar_tx
 
 %% @doc Ensure that a public and private key pair can be used to sign and verify data.
@@ -441,7 +454,7 @@ tx_cost_test() ->
 		calculate_min_tx_cost(Size, Diff, Height, WalletList, Addr2, Timestamp)
 	).
 
-generate_tx_chunk_list_test() ->
+generate_chunk_index_test() ->
 	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 1.5)),
 	TX =
 		#tx {
@@ -456,5 +469,15 @@ generate_tx_chunk_list_test() ->
 		binary:part(crypto:hash(sha256, Chunk2), 0, 3),
 	?assertEqual(
 		[ExpectedChunkID1, ExpectedChunkID2],
-		(generate_chunk_list(TX))#tx.chunk_list
+		(generate_chunk_index(TX))#tx.chunk_index
+	).
+
+generate_chunk_index_hash_test() ->
+	ChunkID1 = <<1,2,3,4,5>>,
+	ChunkID2 = <<6,7,8,9,10>>,
+	TX = #tx { chunk_index = [ChunkID1, ChunkID2], chunk_hash_size = 5 },
+	TX2 = generate_chunk_index_hash(TX),
+	?assertEqual(
+		crypto:hash(sha256, << ChunkID1/binary, ChunkID2/binary >>),
+		TX2#tx.chunk_index_hash
 	).
