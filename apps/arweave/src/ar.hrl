@@ -278,7 +278,8 @@
 	reward_pool = 0, % Current pool of mining reward.
 	weave_size = 0, % Current size of the weave in bytes (counts tx data fields).
 	block_size = 0, % The size of the transactions inside this block.
-	cumulative_diff = 0 % The sum of the squared difficulty on the branch.
+	cumulative_diff = 0, % The sum of the squared difficulty on the branch.
+	recall_chunk_selection = 1 % The recall chunk option that the miner has picked.
 }).
 
 %% @doc A transaction, as stored in a block.
