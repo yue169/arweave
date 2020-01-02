@@ -261,7 +261,7 @@
 
 %% @doc Max size of a single data chunk, in bytes.
 %% 512KB should be enough -- future, please don't hate me.
--define(CHUNK_SIZE, 512 * 1024).
+-define(DATA_CHUNK_SIZE, 512 * 1024).
 %% @doc The maximum size of the chunk hash list in bytes. Shorter chunk IDs
 %% (configurable by the user on a per-TX basis) give lower safety in terms of
 %% the potential for hash collisions, but higher transaction size limits.
