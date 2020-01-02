@@ -294,6 +294,7 @@
 
 %% @doc A transaction, as stored in a block.
 -record(tx, {
+	format = 2, % The transaction (and signature) format.
 	id = <<>>, % TX UID (Signature hash).
 	last_tx = <<>>, % Get last TX hash.
 	owner = <<>>, % Public key of transaction owner.
