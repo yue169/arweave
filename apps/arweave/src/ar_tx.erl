@@ -3,7 +3,7 @@
 -export([sign/2, sign/3, verify/5, verify_txs/5, signature_data_segment/1]).
 -export([tx_to_binary/1, tags_to_list/1]).
 -export([calculate_min_tx_cost/4, calculate_min_tx_cost/6, check_last_tx/2]).
--export([generate_chunk_list/1]).
+-export([generate_chunk_index/1]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -340,17 +340,17 @@ check_last_tx(WalletMap, TX) when is_map(WalletMap) ->
 	end.
 -endif.
 
-%% @doc Take a transaction with a data segment and generate its chunk list, placing
+%% @doc Take a transaction with a data segment and generate its chunk index, placing
 %% this in the appropriate point in the transaction record.
-generate_chunk_list(TX) ->
+generate_chunk_index(TX) ->
 	ChunkIDs =
 		lists:map(
 			fun(Bin) ->
 				binary:part(hash_chunk(TX#tx.chunk_hash_alg, Bin), 0, TX#tx.chunk_hash_size)
 			 end,
-			ar:d(chunk_binary(?DATA_CHUNK_SIZE, TX#tx.data))
+			chunk_binary(?DATA_CHUNK_SIZE, TX#tx.data)
 		),
-	TX#tx { chunk_list = ChunkIDs }.
+	TX#tx { chunk_index = ChunkIDs }.
 
 hash_chunk(?DEFAULT_CHUNK_ALG, Bin) -> crypto:hash(sha256, Bin).
 
