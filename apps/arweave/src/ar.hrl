@@ -259,6 +259,15 @@
 -define(DIFF_ADJUSTMENT_DOWN_LIMIT, 2).
 -define(DIFF_ADJUSTMENT_UP_LIMIT, 4).
 
+%% @doc Max size of a single data chunk, in bytes (256KB for now).
+-define(CHUNK_SIZE, 256 * 1024).
+%% @doc The maximum size of the chunk hash list in bytes. Shorter chunk IDs
+%% (configurable by the user on a per-TX basis) give lower safety in terms of
+%% the potential for hash collisions, but higher transaction size limits.
+-define(MAX_CHUNK_LIST_SIZE, 512 * 1024).
+-define(DEFAULT_CHUNK_SIZE, 32).
+-define(DEFAULT_CHUNK_ALG, "sha2-256").
+
 %% @doc A full block or block shadow (see more on txs field).
 -record(block, {
 	nonce = <<>>, % The nonce used to satisfy the mining problem when mined
