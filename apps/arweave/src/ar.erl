@@ -585,7 +585,7 @@ tests(Args) ->
 	Mods =
 		lists:map(
 			fun(Mod) when is_atom(Mod) -> Mod;
-			   (Str) -> list_to_existing_atom(Str)
+			   (Str) -> list_to_atom(Str)
 			end,
 			Args
 		),
