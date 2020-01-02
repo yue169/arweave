@@ -473,8 +473,8 @@ generate_chunk_index_test() ->
 	).
 
 generate_chunk_index_hash_test() ->
-	ChunkID1 = <<1,2,3,4,5>>,
-	ChunkID2 = <<6,7,8,9,10>>,
+	ChunkID1 = << 1, 2, 3, 4, 5 >>,
+	ChunkID2 = << 6, 7, 8, 9, 10 >>,
 	TX = #tx { chunk_index = [ChunkID1, ChunkID2], chunk_hash_size = 5 },
 	TX2 = generate_chunk_index_hash(TX),
 	?assertEqual(
