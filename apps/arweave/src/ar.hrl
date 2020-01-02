@@ -259,13 +259,14 @@
 -define(DIFF_ADJUSTMENT_DOWN_LIMIT, 2).
 -define(DIFF_ADJUSTMENT_UP_LIMIT, 4).
 
-%% @doc Max size of a single data chunk, in bytes (256KB for now).
--define(CHUNK_SIZE, 256 * 1024).
+%% @doc Max size of a single data chunk, in bytes.
+%% 512KB should be enough -- future, please don't hate me.
+-define(CHUNK_SIZE, 512 * 1024).
 %% @doc The maximum size of the chunk hash list in bytes. Shorter chunk IDs
 %% (configurable by the user on a per-TX basis) give lower safety in terms of
 %% the potential for hash collisions, but higher transaction size limits.
--define(MAX_CHUNK_LIST_SIZE, 512 * 1024).
--define(DEFAULT_CHUNK_SIZE, 32).
+-define(MAX_CHUNK_LIST_SIZE, 384 * 1024).
+-define(DEFAULT_CHUNK_HASH_SIZE, 20).
 -define(DEFAULT_CHUNK_ALG, "sha2-256").
 
 %% @doc A full block or block shadow (see more on txs field).
@@ -304,7 +305,7 @@
 	chunk_list = [], % The list of chunks associated with a transaction.
 	chunk_list_hash = <<>>, % The hash of all of the chunk IDs.
 	chunk_hash_alg = ?DEFAULT_CHUNK_ALG, % The hashing algorithm used to generate chunk IDs.
-	chunk_hash_size = ?DEFAULT_CHUNK_SIZE, % The size (in bytes) of chunk IDs in the TX.
+	chunk_hash_size = ?DEFAULT_CHUNK_HASH_SIZE, % The size (in bytes) of chunk IDs in the TX.
 	signature = <<>>, % Transaction signature.
 	reward = 0 % Transaction mining reward.
 }).
