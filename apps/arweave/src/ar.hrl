@@ -294,7 +294,7 @@
 
 %% @doc A transaction, as stored in a block.
 -record(tx, {
-	format = 2, % The transaction (and signature) format.
+	format = 1, % The transaction (and signature) format.
 	id = <<>>, % TX UID (Signature hash).
 	last_tx = <<>>, % Get last TX hash.
 	owner = <<>>, % Public key of transaction owner.
@@ -303,8 +303,8 @@
 	quantity = 0, % Amount of Winston to send.
 	data = <<>>, % Data in transaction (if data transaction).
 	data_size = 0, % Size (in bytes) of the data used in transactions.
-	chunk_list = [], % The list of chunks associated with a transaction.
-	chunk_list_hash = <<>>, % The hash of all of the chunk IDs.
+	chunk_index = [], % The list of chunks associated with a transaction.
+	chunk_index_hash = <<>>, % The hash of all of the chunk IDs.
 	chunk_hash_alg = ?DEFAULT_CHUNK_ALG, % The hashing algorithm used to generate chunk IDs.
 	chunk_hash_size = ?DEFAULT_CHUNK_HASH_SIZE, % The size (in bytes) of chunk IDs in the TX.
 	signature = <<>>, % Transaction signature.
