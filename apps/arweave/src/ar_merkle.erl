@@ -143,21 +143,40 @@ hash(Parts) ->
 
 %%% Tests
 
-generate_balanced_tree_test() ->
-    TestSize = 1024,
-    {_MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, TestSize) ]),
-    ?assertEqual(length(Tree), (TestSize*2) - 1).
+-define(TEST_SIZE, 1024).
+-define(UNEVEN_TEST_SIZE, 643).
+-define(UNEVEN_TEST_TARGET, 584).
 
-generate_and_validate_path_test() ->
-    TestSize = 1024,
-    {MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, TestSize) ]),
-    RandomTarget = rand:uniform(TestSize),
+generate_balanced_tree_test() ->
+    {_MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ]),
+    ?assertEqual(length(Tree), (?TEST_SIZE*2) - 1).
+
+generate_and_validate_balanced_tree_path_test() ->
+    {MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ]),
+    RandomTarget = rand:uniform(?TEST_SIZE),
     ?assertEqual(
         RandomTarget,
         binary:decode_unsigned(
             ar_merkle:validate_path(
                 MR, RandomTarget,
                 ar_merkle:generate_path(MR, RandomTarget, Tree)
+            )
+        )
+    ).
+
+generate_uneven_tree_test() ->
+    {_MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?UNEVEN_TEST_SIZE) ]),
+    ?assertEqual(length(Tree), (?UNEVEN_TEST_SIZE*2) - 1).
+
+generate_and_validate_uneven_tree_path_test() ->
+    {MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?UNEVEN_TEST_SIZE) ]),
+    % Make sure the target is in the 'uneven' ending of the tree.
+    ?assertEqual(
+        ?UNEVEN_TEST_TARGET,
+        binary:decode_unsigned(
+            ar_merkle:validate_path(
+                MR, ?UNEVEN_TEST_TARGET,
+                ar_merkle:generate_path(MR, ?UNEVEN_TEST_TARGET, Tree)
             )
         )
     ).
