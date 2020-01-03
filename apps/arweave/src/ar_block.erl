@@ -567,10 +567,10 @@ verify_block_hash_list_merkle(NewB, _CurrentB) when NewB#block.height < ?FORK_1_
 	NewB#block.hash_list_merkle == <<>>;
 verify_block_hash_list_merkle(NewB, CurrentB) when NewB#block.height == ?FORK_1_6 ->
 	NewB#block.hash_list_merkle ==
-		ar_merkle:block_hash_list_to_merkle_root(CurrentB#block.hash_list);
+		ar_unbalanced_merkle:block_hash_list_to_merkle_root(CurrentB#block.hash_list);
 verify_block_hash_list_merkle(NewB, CurrentB) ->
 	NewB#block.hash_list_merkle ==
-		ar_merkle:root(CurrentB#block.hash_list_merkle, CurrentB#block.indep_hash).
+		ar_unbalanced_merkle:root(CurrentB#block.hash_list_merkle, CurrentB#block.indep_hash).
 
 % Block shadow functions
 

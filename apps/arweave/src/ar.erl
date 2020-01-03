@@ -26,6 +26,7 @@
 	CORE_TEST_MODS,
 	[
 		ar,
+		ar_unbalanced_merkle,
 		ar_block_index,
 		ar_config_tests,
 		ar_deep_hash,
