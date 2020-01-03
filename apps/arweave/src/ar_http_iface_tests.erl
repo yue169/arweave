@@ -327,15 +327,13 @@ add_external_chunked_tx_test() ->
 	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 5.5)),
 	{Priv, Pub} = ar_wallet:new(),
 	UnsignedTX =
-		ar_tx:generate_data_root(
-			ar_tx:generate_data_tree(
-				#tx {
-					format = 2,
-					data = TXData,
-					data_size = byte_size(TXData),
-					reward = ?AR(100)
-				}
-			)
+		ar_tx:generate_data_tree(
+			#tx {
+				format = 2,
+				data = TXData,
+				data_size = byte_size(TXData),
+				reward = ?AR(100)
+			}
 		),
 	UnsignedTX2 = UnsignedTX#tx { data = <<>>, data_tree = [] },
 	SignedTX = ar_tx:sign(UnsignedTX2, Priv, Pub),
