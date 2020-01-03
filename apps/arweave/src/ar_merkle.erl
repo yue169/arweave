@@ -1,6 +1,8 @@
 -module(ar_merkle).
 -export([generate_tree/1, generate_path/3]).
 -export([validate_path/3]).
+
+-include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %%% Generates annotated merkle trees, paths inside those trees, as well 
@@ -16,12 +18,14 @@
     max % The maximum observed note at this point
 }).
 
--define(HASH_SIZE, 32).
+-define(HASH_SIZE, ?CHUNK_ID_HASH_SIZE).
 -define(NOTE_SIZE, 8).
 
 %%% Tree generation.
 %%% Returns the merkle root and the tree data structure.
 
+%% @doc Generate a tree from a list of pairs of IDs (of length 32 bytes)
+%% and labels -- most often sizes.
 generate_tree(Elements) ->
     generate_all_rows(generate_leaves(Elements)).
 

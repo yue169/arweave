@@ -266,7 +266,7 @@
 %% (configurable by the user on a per-TX basis) give lower safety in terms of
 %% the potential for hash collisions, but higher transaction size limits.
 -define(MAX_CHUNK_LIST_SIZE, 384 * 1024).
--define(DEFAULT_CHUNK_HASH_SIZE, 20).
+-define(CHUNK_ID_HASH_SIZE, 32).
 -define(DEFAULT_CHUNK_ALG, "sha2-256").
 
 %% @doc A full block or block shadow (see more on txs field).
@@ -305,8 +305,6 @@
 	data_size = 0, % Size (in bytes) of the data used in transactions.
 	data_tree = [], % The list of chunks associated with a transaction.
 	data_root = <<>>, % The hash of all of the chunk IDs.
-	chunk_hash_alg = ?DEFAULT_CHUNK_ALG, % The hashing algorithm used to generate chunk IDs.
-	chunk_hash_size = ?DEFAULT_CHUNK_HASH_SIZE, % The size (in bytes) of chunk IDs in the TX.
 	signature = <<>>, % Transaction signature.
 	reward = 0 % Transaction mining reward.
 }).

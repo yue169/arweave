@@ -1,6 +1,5 @@
 -module(ar_poa).
 -export([validate_data_root/2, validate_data_tree/2, validate_chunk/3]).
--export([validate_data_tree_lengths/2]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -11,8 +10,7 @@
 %% matches the chunk index hash of a transaction.
 validate_data_root(TX, ChunkIndex) ->
 	TX2 = ar_tx:generate_data_root(TX#tx { data_tree = ChunkIndex }),
-	(TX#tx.data_root == TX2#tx.data_root) andalso
-		validate_data_tree_lengths(TX#tx.chunk_hash_size, ChunkIndex).
+	(TX#tx.data_root == TX2#tx.data_root).
 
 %% @doc Validate that the chunk index against the entire TX data.
 validate_data_tree(TX, Data) ->
@@ -24,36 +22,33 @@ validate_chunk(TX, ChunkNum, Chunk) ->
 	ChunkID = lists:nth(ChunkNum, TX#tx.data_tree),
 	ChunkID == ar_tx:generate_chunk_id(TX, Chunk).
 
-validate_data_tree_lengths(HashSize, ChunkIndex) ->
-	lists:all(fun(Hash) -> byte_size(Hash) == HashSize end, ChunkIndex).
-
 validate_chunking_test() ->
 	% Generate our TX data, wallet, and signed and indexed transactions.
 	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 5.5)),
-	{Priv, Pub} = ar_wallet:new(),
-	UnsignedTX =
-		ar_tx:generate_data_root(
-			ar_tx:generate_data_tree(
-				#tx {
-					format = 2,
-					data = TXData,
-					data_size = byte_size(TXData),
-					reward = ?AR(100)
-				}
-			)
-		),
-	SignedTX = ar_tx:sign(UnsignedTX#tx { data = <<>> }, Priv, Pub),
-	% Extract the data and indexes needed for proof verification.
-	% In practice these will be received over the wire from another node,
-	% or from disk.
-    RecvdTX = SignedTX#tx { data_tree = [] },
-	ChunkIndex = UnsignedTX#tx.data_tree,
-	ChallengeChunk = 3,
-    Chunk =
+	ChallengeLocation = (?DATA_CHUNK_SIZE * 3) + 10, % Pick a byte in the third chunk
+		Chunk =
 		binary:part(
 			TXData,
-			trunc(?DATA_CHUNK_SIZE*(ChallengeChunk-1)),
+			trunc(?DATA_CHUNK_SIZE*3),
 			?DATA_CHUNK_SIZE
+		),
+	{Priv, Pub} = ar_wallet:new(),
+	UnsignedTX =
+		ar_tx:generate_data_tree(
+			#tx {
+				format = 2,
+				data = TXData,
+				data_size = byte_size(TXData),
+				reward = ?AR(100)
+			}
+		),
+	
+	SignedTX = ar_tx:sign(UnsignedTX#tx { data = <<>>, data_tree = [] }, Priv, Pub),
+	DataPath =
+		ar_merkle:generate_path(
+			SignedTX#tx.data_root,
+			ChallengeLocation,
+			UnsignedTX#tx.data_tree
 		),
 	% Verify each level of the index and the chunk itself.
 	Diff = 1,
@@ -68,6 +63,9 @@ validate_chunking_test() ->
 			Timestamp
 		)
 	),
-    ?assert(validate_data_root(RecvdTX, ChunkIndex)),
-    RecvdTX2 = RecvdTX#tx { data_tree = ChunkIndex },
-    ?assert(validate_chunk(RecvdTX2, 3, Chunk)).
+	RealChunkID = ar_tx:generate_chunk_id(Chunk),
+	PathChunkID = ar_merkle:validate_path(SignedTX#tx.data_root, ChallengeLocation, DataPath),
+	?assertEqual(RealChunkID, PathChunkID),
+	% In this case, we know the chunk is valid is it is generated in the test, but in the real
+	% world, this chunk would come from the proof of access received from the network.
+	?assertEqual(PathChunkID, ar_tx:generate_chunk_id(Chunk)).

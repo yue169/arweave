@@ -3,7 +3,7 @@
 -export([sign/2, sign/3, verify/5, verify_txs/5, signature_data_segment/1]).
 -export([tx_to_binary/1, tags_to_list/1]).
 -export([calculate_min_tx_cost/4, calculate_min_tx_cost/6, check_last_tx/2]).
--export([generate_data_tree/1, generate_data_root/1, generate_chunk_id/2]).
+-export([generate_data_tree/1, generate_chunk_id/1]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -72,8 +72,6 @@ signature_data_segment(T) when T#tx.format == 2 ->
 		(list_to_binary(integer_to_list(T#tx.quantity)))/binary,
 		(integer_to_binary(T#tx.data_size))/binary,
 		(T#tx.data_root)/binary,
-		(list_to_binary(T#tx.chunk_hash_alg))/binary,
-		(integer_to_binary(T#tx.chunk_hash_size))/binary,
 		(list_to_binary(integer_to_list(T#tx.reward)))/binary
 	>>.
 
@@ -359,29 +357,22 @@ check_last_tx(WalletMap, TX) when is_map(WalletMap) ->
 generate_data_tree(TX) ->
 	ChunkIDs =
 		lists:map(
-			fun(Chunk) -> generate_chunk_id(TX, Chunk) end,
+			fun(Chunk) -> generate_chunk_id(Chunk) end,
 			chunk_binary(?DATA_CHUNK_SIZE, TX#tx.data)
 		),
-	TX#tx { data_tree = ChunkIDs }.
+	{Root, Tree} =
+		ar_merkle:generate_tree([ {ChunkID, ?DATA_CHUNK_SIZE} || ChunkID <- ChunkIDs ]),
+	TX#tx { data_tree = Tree, data_root = Root }.
 
 %% @doc Generate a chunk ID according to the specification found in the TX record.
-generate_chunk_id(TX, Chunk) when TX#tx.chunk_hash_alg == "sha2-256" -> 
-	binary:part(crypto:hash(sha256, Chunk), 0, TX#tx.chunk_hash_size).
+generate_chunk_id(Chunk) -> 
+	crypto:hash(sha256, Chunk).
 
 chunk_binary(ChunkSize, Bin) when byte_size(Bin) < ChunkSize ->
 	[ Bin ];
 chunk_binary(ChunkSize, Bin) ->
 	<< ChunkBin:ChunkSize/binary, Rest/binary >> = Bin,
 	[ ChunkBin | chunk_binary(ChunkSize, Rest) ].
-
-%% @doc Generate the chunk index hash for a given chunk index.
-generate_data_root(TX) ->
-	% Sanity check that chunk hashes are of the appropriate length.
-	true = ar_poa:validate_data_tree_lengths(TX#tx.chunk_hash_size, TX#tx.data_tree),
-	% Generate the TX with the new chunk index hash.
-	TX#tx {
-		data_root = crypto:hash(sha256, binary:list_to_bin(TX#tx.data_tree))
-	}.
 
 %%% Tests: ar_tx
 
@@ -402,19 +393,17 @@ sign_tx_test() ->
 		)
 	).
 
-sign_and_verify_chunked_test() ->
+sign_and_verify_chuncked_test() ->
 	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 5.5)),
 	{Priv, Pub} = ar_wallet:new(),
 	UnsignedTX =
-		generate_data_root(
-			generate_data_tree(
-				#tx {
-					format = 2,
-					data = TXData,
-					data_size = byte_size(TXData),
-					reward = ?AR(100)
-				}
-			)
+		generate_data_tree(
+			#tx {
+				format = 2,
+				data = TXData,
+				data_size = byte_size(TXData),
+				reward = ?AR(100)
+			}
 		),
 	SignedTX = sign(UnsignedTX#tx { data = <<>> }, Priv, Pub),
 	Diff = 1,
@@ -490,32 +479,4 @@ tx_cost_test() ->
 	?assertEqual(
 		calculate_min_tx_cost(Size, Diff, Height, Timestamp) + ?WALLET_GEN_FEE,
 		calculate_min_tx_cost(Size, Diff, Height, WalletList, Addr2, Timestamp)
-	).
-
-generate_data_tree_test() ->
-	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 1.5)),
-	TX =
-		#tx {
-			data = TXData,
-			chunk_hash_size = 3
-		},
-	Chunk1 = binary:part(TXData, 0, ?DATA_CHUNK_SIZE),
-	Chunk2 = binary:part(TXData, ?DATA_CHUNK_SIZE, trunc(?DATA_CHUNK_SIZE/2)),
-	ExpectedChunkID1 =
-		binary:part(crypto:hash(sha256, Chunk1), 0, 3),
-	ExpectedChunkID2 =
-		binary:part(crypto:hash(sha256, Chunk2), 0, 3),
-	?assertEqual(
-		[ExpectedChunkID1, ExpectedChunkID2],
-		(generate_data_tree(TX))#tx.data_tree
-	).
-
-generate_data_root_test() ->
-	ChunkID1 = << 1, 2, 3, 4, 5 >>,
-	ChunkID2 = << 6, 7, 8, 9, 10 >>,
-	TX = #tx { data_tree = [ChunkID1, ChunkID2], chunk_hash_size = 5 },
-	TX2 = generate_data_root(TX),
-	?assertEqual(
-		crypto:hash(sha256, << ChunkID1/binary, ChunkID2/binary >>),
-		TX2#tx.data_root
 	).

@@ -268,10 +268,8 @@ tx_to_json_struct(
 		reward = Reward,
 		signature = Sig,
 		data_size = DataSize,
-		data_tree = ChunkIndex,
-		data_root = ChunkIndexHash,
-		chunk_hash_alg = ChunkHashAlg,
-		chunk_hash_size = ChunkHashSize
+		data_tree = DataTree,
+		data_root = DataRoot
 	}) ->
 	{
 		[
@@ -296,14 +294,18 @@ tx_to_json_struct(
 			{quantity, integer_to_binary(Quantity)},
 			{data, ar_util:encode(Data)},
 			{data_size, integer_to_binary(DataSize)},
-			{data_tree, lists:map(fun ar_util:encode/1, ChunkIndex)},
-			{data_root, ar_util:encode(ChunkIndexHash)},
-			{chunk_hash_alg, ChunkHashAlg},
-			{chunk_hash_size, ChunkHashSize},
+			{data_tree, tree_to_json_struct(DataTree)},
+			{data_root, ar_util:encode(DataRoot)},
 			{reward, integer_to_binary(Reward)},
 			{signature, ar_util:encode(Sig)}
 		]
 	}.
+
+%% @doc Transform merkle trees to and from JSON objects.
+%% At the moment, just drop it.
+tree_to_json_struct(_) -> [].
+
+json_struct_to_tree(_) -> [].
 
 %% @doc Convert parsed JSON tx fields from a HTTP request into a
 %% transaction record.
@@ -339,14 +341,8 @@ json_struct_to_tx({TXStruct}) ->
 			BaseTX#tx {
 				format = 2,
 				data_size = binary_to_integer(find_value(<<"data_size">>, TXStruct)),
-				data_tree =
-					lists:map(
-						fun ar_util:decode/1,
-						find_value(<<"data_tree">>, TXStruct)
-					),
-				data_root = ar_util:decode(find_value(<<"data_root">>, TXStruct)),
-				chunk_hash_alg = find_value(<<"chunk_hash_alg">>, TXStruct),
-				chunk_hash_size = find_value(<<"chunk_hash_size">>, TXStruct)
+				data_tree = json_struct_to_tree(find_value(<<"data_tree">>, TXStruct)),
+				data_root = ar_util:decode(find_value(<<"data_root">>, TXStruct))
 			}
 	end.
 
@@ -453,7 +449,12 @@ full_block_roundtrip_test() ->
 %% @doc Convert a new TX into JSON and back, ensure the result is the same.
 tx_roundtrip_test() ->
 	TXBase = ar_tx:new(<<"test">>),
-	TX = TXBase#tx { format = 2, tags = [{<<"Name1">>, <<"Value1">>}], chunk_hash_size = 10 },
+	TX =
+		TXBase#tx {
+			format = 2,
+			tags = [{<<"Name1">>, <<"Value1">>}],
+			data_root = << 0:256 >>
+		},
 	JsonTX = jsonify(tx_to_json_struct(TX)),
 	?assertEqual(
 		TX,
