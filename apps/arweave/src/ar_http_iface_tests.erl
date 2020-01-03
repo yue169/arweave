@@ -321,6 +321,38 @@ add_external_tx_test() ->
 	TXID = TX#tx.id,
 	?assertEqual([TXID], (ar_storage:read_block(B1, ar_node:get_hash_list(Node)))#block.txs).
 
+%% @doc Test adding a chunked TX (format 2) to a block and mining it.
+add_external_chunked_tx_test() ->
+	ar_storage:clear(),
+	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 5.5)),
+	{Priv, Pub} = ar_wallet:new(),
+	UnsignedTX =
+		ar_tx:generate_chunk_index_hash(
+			ar_tx:generate_chunk_index(
+				#tx {
+					format = 2,
+					data = TXData,
+					data_size = byte_size(TXData),
+					reward = ?AR(100)
+				}
+			)
+		),
+	UnsignedTX2 = UnsignedTX#tx { data = <<>>, chunk_index = [] },
+	SignedTX = ar_tx:sign(UnsignedTX2, Priv, Pub),
+	[B0] = ar_weave:init([{ar_wallet:to_address(Pub), ?AR(100), <<>>}]),
+	Node = ar_node:start([], [B0]),
+	ar_http_iface_server:reregister(Node),
+	Bridge = ar_bridge:start([], Node, ?DEFAULT_HTTP_IFACE_PORT),
+	ar_http_iface_server:reregister(http_bridge_node, Bridge),
+	ar_node:add_peers(Node, Bridge),
+	ar_http_iface_client:send_new_tx({127, 0, 0, 1, 1984}, SignedTX),
+	receive after 2500 -> ok end,
+	ar_node:mine(Node),
+	receive after 1000 -> ok end,
+	[B1|_] = ar_node:get_blocks(Node),
+	TXID = SignedTX#tx.id,
+	?assertEqual([TXID], (ar_storage:read_block(B1, ar_node:get_hash_list(Node)))#block.txs).
+
 %% @doc Test adding transactions to a block.
 add_external_tx_with_tags_test() ->
 	ar_storage:clear(),
