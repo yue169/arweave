@@ -50,12 +50,15 @@ generate_leaves(Elements) ->
         ),
     lists:reverse(LeavesRev).
 
+%% TODO: This implementation leaves some duplicates in the tree structure.
+%% The produced trees could be a little smaller if these duplicates were 
+%% not present, but removing them with `ar_util:unique` takes far too long.
 generate_all_rows(Leaves) ->
     generate_all_rows(Leaves, Leaves).
 
 generate_all_rows([RootN], Tree) ->
-    {RootN#node.id, ar_util:unique(Tree)};
-    generate_all_rows(Row, Tree) ->
+    {RootN#node.id, Tree};
+generate_all_rows(Row, Tree) ->
     NewRow = generate_row(Row),
     generate_all_rows(NewRow, NewRow ++ Tree).
 
@@ -143,9 +146,9 @@ hash(Parts) ->
 
 %%% Tests
 
--define(TEST_SIZE, 1024).
--define(UNEVEN_TEST_SIZE, 643).
--define(UNEVEN_TEST_TARGET, 584).
+-define(TEST_SIZE, 1024 * 64).
+-define(UNEVEN_TEST_SIZE, 35643).
+-define(UNEVEN_TEST_TARGET, 33271).
 
 generate_balanced_tree_test() ->
     {_MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ]),
@@ -164,10 +167,6 @@ generate_and_validate_balanced_tree_path_test() ->
         )
     ).
 
-generate_uneven_tree_test() ->
-    {_MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?UNEVEN_TEST_SIZE) ]),
-    ?assertEqual(length(Tree), (?UNEVEN_TEST_SIZE*2) - 1).
-
 generate_and_validate_uneven_tree_path_test() ->
     {MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?UNEVEN_TEST_SIZE) ]),
     % Make sure the target is in the 'uneven' ending of the tree.
@@ -178,5 +177,16 @@ generate_and_validate_uneven_tree_path_test() ->
                 MR, ?UNEVEN_TEST_TARGET,
                 ar_merkle:generate_path(MR, ?UNEVEN_TEST_TARGET, Tree)
             )
+        )
+    ).
+
+reject_invalid_tree_path_test() ->
+    {MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ]),
+    RandomTarget = rand:uniform(?TEST_SIZE),
+    ?assertEqual(
+        false,
+        ar_merkle:validate_path(
+            MR, RandomTarget,
+            ar_merkle:generate_path(MR, 1000, Tree)
         )
     ).
