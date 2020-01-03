@@ -1,6 +1,6 @@
 -module(ar_poa).
--export([validate_chunk_index_hash/2, validate_chunk_index/2, validate_chunk/3]).
--export([validate_chunk_index_lengths/2]).
+-export([validate_data_root/2, validate_data_tree/2, validate_chunk/3]).
+-export([validate_data_tree_lengths/2]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -9,22 +9,22 @@
 
 %% @doc Validate that an untrusted chunk index (probably received from another peer)
 %% matches the chunk index hash of a transaction.
-validate_chunk_index_hash(TX, ChunkIndex) ->
-	TX2 = ar_tx:generate_chunk_index_hash(TX#tx { chunk_index = ChunkIndex }),
-	(TX#tx.chunk_index_hash == TX2#tx.chunk_index_hash) andalso
-		validate_chunk_index_lengths(TX#tx.chunk_hash_size, ChunkIndex).
+validate_data_root(TX, ChunkIndex) ->
+	TX2 = ar_tx:generate_data_root(TX#tx { data_tree = ChunkIndex }),
+	(TX#tx.data_root == TX2#tx.data_root) andalso
+		validate_data_tree_lengths(TX#tx.chunk_hash_size, ChunkIndex).
 
 %% @doc Validate that the chunk index against the entire TX data.
-validate_chunk_index(TX, Data) ->
-	TX2 = ar_tx:generate_chunk_index(TX#tx { data = Data }),
-	TX#tx.chunk_index == TX2#tx.chunk_index.
+validate_data_tree(TX, Data) ->
+	TX2 = ar_tx:generate_data_tree(TX#tx { data = Data }),
+	TX#tx.data_tree == TX2#tx.data_tree.
 
 %% @doc Validate a single chunk from a chunk index matches.
 validate_chunk(TX, ChunkNum, Chunk) ->
-	ChunkID = lists:nth(ChunkNum, TX#tx.chunk_index),
+	ChunkID = lists:nth(ChunkNum, TX#tx.data_tree),
 	ChunkID == ar_tx:generate_chunk_id(TX, Chunk).
 
-validate_chunk_index_lengths(HashSize, ChunkIndex) ->
+validate_data_tree_lengths(HashSize, ChunkIndex) ->
 	lists:all(fun(Hash) -> byte_size(Hash) == HashSize end, ChunkIndex).
 
 validate_chunking_test() ->
@@ -32,8 +32,8 @@ validate_chunking_test() ->
 	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 5.5)),
 	{Priv, Pub} = ar_wallet:new(),
 	UnsignedTX =
-		ar_tx:generate_chunk_index_hash(
-			ar_tx:generate_chunk_index(
+		ar_tx:generate_data_root(
+			ar_tx:generate_data_tree(
 				#tx {
 					format = 2,
 					data = TXData,
@@ -46,8 +46,8 @@ validate_chunking_test() ->
 	% Extract the data and indexes needed for proof verification.
 	% In practice these will be received over the wire from another node,
 	% or from disk.
-    RecvdTX = SignedTX#tx { chunk_index = [] },
-	ChunkIndex = UnsignedTX#tx.chunk_index,
+    RecvdTX = SignedTX#tx { data_tree = [] },
+	ChunkIndex = UnsignedTX#tx.data_tree,
 	ChallengeChunk = 3,
     Chunk =
 		binary:part(
@@ -68,6 +68,6 @@ validate_chunking_test() ->
 			Timestamp
 		)
 	),
-    ?assert(validate_chunk_index_hash(RecvdTX, ChunkIndex)),
-    RecvdTX2 = RecvdTX#tx { chunk_index = ChunkIndex },
+    ?assert(validate_data_root(RecvdTX, ChunkIndex)),
+    RecvdTX2 = RecvdTX#tx { data_tree = ChunkIndex },
     ?assert(validate_chunk(RecvdTX2, 3, Chunk)).

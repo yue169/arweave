@@ -268,8 +268,8 @@ tx_to_json_struct(
 		reward = Reward,
 		signature = Sig,
 		data_size = DataSize,
-		chunk_index = ChunkIndex,
-		chunk_index_hash = ChunkIndexHash,
+		data_tree = ChunkIndex,
+		data_root = ChunkIndexHash,
 		chunk_hash_alg = ChunkHashAlg,
 		chunk_hash_size = ChunkHashSize
 	}) ->
@@ -296,8 +296,8 @@ tx_to_json_struct(
 			{quantity, integer_to_binary(Quantity)},
 			{data, ar_util:encode(Data)},
 			{data_size, integer_to_binary(DataSize)},
-			{chunk_index, lists:map(fun ar_util:encode/1, ChunkIndex)},
-			{chunk_index_hash, ar_util:encode(ChunkIndexHash)},
+			{data_tree, lists:map(fun ar_util:encode/1, ChunkIndex)},
+			{data_root, ar_util:encode(ChunkIndexHash)},
 			{chunk_hash_alg, ChunkHashAlg},
 			{chunk_hash_size, ChunkHashSize},
 			{reward, integer_to_binary(Reward)},
@@ -339,12 +339,12 @@ json_struct_to_tx({TXStruct}) ->
 			BaseTX#tx {
 				format = 2,
 				data_size = binary_to_integer(find_value(<<"data_size">>, TXStruct)),
-				chunk_index =
+				data_tree =
 					lists:map(
 						fun ar_util:decode/1,
-						find_value(<<"chunk_index">>, TXStruct)
+						find_value(<<"data_tree">>, TXStruct)
 					),
-				chunk_index_hash = ar_util:decode(find_value(<<"chunk_index_hash">>, TXStruct)),
+				data_root = ar_util:decode(find_value(<<"data_root">>, TXStruct)),
 				chunk_hash_alg = find_value(<<"chunk_hash_alg">>, TXStruct),
 				chunk_hash_size = find_value(<<"chunk_hash_size">>, TXStruct)
 			}
