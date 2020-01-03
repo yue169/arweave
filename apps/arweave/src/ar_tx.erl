@@ -3,7 +3,7 @@
 -export([sign/2, sign/3, verify/5, verify_txs/5, signature_data_segment/1]).
 -export([tx_to_binary/1, tags_to_list/1]).
 -export([calculate_min_tx_cost/4, calculate_min_tx_cost/6, check_last_tx/2]).
--export([generate_chunk_index/1]).
+-export([generate_chunk_index/1, generate_chunk_index_hash/1, generate_chunk_id/2]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -359,14 +359,14 @@ check_last_tx(WalletMap, TX) when is_map(WalletMap) ->
 generate_chunk_index(TX) ->
 	ChunkIDs =
 		lists:map(
-			fun(Bin) ->
-				binary:part(hash_chunk(TX#tx.chunk_hash_alg, Bin), 0, TX#tx.chunk_hash_size)
-			 end,
+			fun(Chunk) -> generate_chunk_id(TX, Chunk) end,
 			chunk_binary(?DATA_CHUNK_SIZE, TX#tx.data)
 		),
 	TX#tx { chunk_index = ChunkIDs }.
 
-hash_chunk(?DEFAULT_CHUNK_ALG, Bin) -> crypto:hash(sha256, Bin).
+%% @doc Generate a chunk ID according to the specification found in the TX record.
+generate_chunk_id(TX, Chunk) when TX#tx.chunk_hash_alg == "sha2-256" -> 
+	binary:part(crypto:hash(sha256, Chunk), 0, TX#tx.chunk_hash_size).
 
 chunk_binary(ChunkSize, Bin) when byte_size(Bin) < ChunkSize ->
 	[ Bin ];
@@ -377,11 +377,7 @@ chunk_binary(ChunkSize, Bin) ->
 %% @doc Generate the chunk index hash for a given chunk index.
 generate_chunk_index_hash(TX) ->
 	% Sanity check that chunk hashes are of the appropriate length.
-	true =
-		lists:all(
-			fun(Hash) -> byte_size(Hash) == TX#tx.chunk_hash_size end,
-			TX#tx.chunk_index
-		),
+	true = ar_poa:validate_chunk_index_lengths(TX#tx.chunk_hash_size, TX#tx.chunk_index),
 	% Generate the TX with the new chunk index hash.
 	TX#tx {
 		chunk_index_hash = crypto:hash(sha256, binary:list_to_bin(TX#tx.chunk_index))
