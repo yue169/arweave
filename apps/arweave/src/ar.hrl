@@ -280,6 +280,7 @@
 	hash = <<>>, % A hash of this block, the previous block and the recall block.
 	indep_hash = [], % A hash of this block JSON encoded. (TODO: Shouldn't it be a binary as it is a hash?)
 	txs = [], % A list of tx records in full blocks, or a list of tx ids in block shadows.
+	tx_root = <<>>, % Merkle root of the tree of ordered TXs.
 	hash_list = unset, % A list of all previous indep hashes.
 	hash_list_merkle = <<>>, % The merkle root of the block's BHL.
 	wallet_list = [], % A map of wallet balances, or undefined.
@@ -307,6 +308,15 @@
 	data_root = <<>>, % The hash of all of the chunk IDs.
 	signature = <<>>, % Transaction signature.
 	reward = 0 % Transaction mining reward.
+}).
+
+%% @doc A succinct proof of access to a recall byte found in a TX.
+-record(poa, {
+	recall_block, % Header of the block that the TX containing the chunk is found in.
+	tx_path, % Path through the merkle tree of TXs in the block.
+	tx, % Header of the TX containing the required data chunk.
+	data_path, % Path through the merkle tree of chunk IDs to the required chunk.
+	chunk % The required data chunk.
 }).
 
 %% @doc Gossip protocol state.

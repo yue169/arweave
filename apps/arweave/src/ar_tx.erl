@@ -4,6 +4,7 @@
 -export([tx_to_binary/1, tags_to_list/1]).
 -export([calculate_min_tx_cost/4, calculate_min_tx_cost/6, check_last_tx/2]).
 -export([generate_data_tree/1, generate_chunk_id/1]).
+-export([verify_after_mining/1]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -120,7 +121,7 @@ do_verify(TX, Diff, Height, Wallets, Timestamp) ->
 		{"last_tx_not_valid",
 		 LastTXCheck},
 		{"tx_id_not_valid",
-		 tx_verify_hash(TX)},
+		 verify_hash(TX)},
 		{"overspend",
 		 validate_overspend(TX, ar_node_utils:apply_tx(Wallets, TX, Height))},
 		{"tx_signature_not_valid",
@@ -278,8 +279,16 @@ tx_field_size_limit(TX, Height) ->
 	end.
 
 %% @doc Verify that the transactions ID is a hash of its signature.
-tx_verify_hash(#tx {signature = Sig, id = ID}) ->
+verify_hash(#tx {signature = Sig, id = ID}) ->
 	ID == crypto:hash(?HASH_ALG, <<Sig/binary>>).
+
+%% @doc Validate the signature and the TXID, after it has been mined into
+%% a block. This check ignores whether the transaction comes from an account
+%% with a high enough balance, etc. Should only be used to validate TX 
+%% headers during proof of access.
+verify_after_mining(TX) ->
+	verify_hash(TX) andalso
+		ar_wallet:verify(TX#tx.owner, signature_data_segment(TX), TX#tx.signature).
 
 %% @doc Check that the structure of the txs tag field is in the expected
 %% key value format.

@@ -1,6 +1,7 @@
 -module(ar_merkle).
 -export([generate_tree/1, generate_path/3]).
 -export([validate_path/3]).
+-export([extract_note/1]).
 
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -126,6 +127,12 @@ validate_path(ID, Dest,
             );
         _ -> false
     end.
+
+%% @doc Get the note attached to the final node from a path.
+extract_note(Path) ->
+    binary:decode_unsigned(
+        binary:part(Path, byte_size(Path) - ?NOTE_SIZE, ?NOTE_SIZE)
+    ).
 
 %%% Helper functions for managing the tree data structure.
 %%% Abstracted so that the concrete data type can be replaced later.
