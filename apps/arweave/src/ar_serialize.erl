@@ -1,6 +1,7 @@
 -module(ar_serialize).
 -export([full_block_to_json_struct/1, json_struct_to_full_block/1]).
 -export([json_struct_to_block/1, block_to_json_struct/1]).
+-export([json_struct_to_poa/1, poa_to_json_struct/1]).
 -export([tx_to_json_struct/1, json_struct_to_tx/1]).
 -export([wallet_list_to_json_struct/1, json_struct_to_wallet_list/1]).
 -export([hash_list_to_json_struct/1, json_struct_to_hash_list/1]).
@@ -51,7 +52,9 @@ block_to_json_struct(
 		height = Height,
 		hash = Hash,
 		indep_hash = IndepHash,
+		header_hash = HeaderHash,
 		txs = TXs,
+		tx_root = TXRoot,
 		wallet_list = WalletList,
 		reward_addr = RewardAddr,
 		tags = Tags,
@@ -59,7 +62,8 @@ block_to_json_struct(
 		weave_size = WeaveSize,
 		block_size = BlockSize,
 		cumulative_diff = CDiff,
-		hash_list_merkle = MR
+		hash_list_merkle = MR,
+		poa = POA
 	}) ->
 	{JSONDiff, JSONCDiff} = case ar_fork:height_1_8() of
 		H when Height >= H ->
@@ -77,6 +81,7 @@ block_to_json_struct(
 			{height, Height},
 			{hash, ar_util:encode(Hash)},
 			{indep_hash, ar_util:encode(IndepHash)},
+			{header_hash, ar_util:encode(HeaderHash)},
 			{txs,
 				lists:map(
 					fun(TXID) when is_binary(TXID) ->
@@ -87,6 +92,7 @@ block_to_json_struct(
 					TXs
 				)
 			},
+			{tx_root, ar_util:encode(TXRoot)},
 			{wallet_list,
 				case is_binary(WalletList) of
 					true -> ar_util:encode(WalletList);
@@ -115,7 +121,8 @@ block_to_json_struct(
 			{weave_size, WeaveSize},
 			{block_size, BlockSize},
 			{cumulative_diff, JSONCDiff},
-			{hash_list_merkle, ar_util:encode(MR)}
+			{hash_list_merkle, ar_util:encode(MR)},
+			{poa, poa_to_json_struct(POA)}
 		],
 	case Height < ?FORK_1_6 of
 		true ->
@@ -181,6 +188,11 @@ json_struct_to_block({BlockStruct}) ->
 		height = Height,
 		hash = ar_util:decode(find_value(<<"hash">>, BlockStruct)),
 		indep_hash = ar_util:decode(find_value(<<"indep_hash">>, BlockStruct)),
+		header_hash =
+			case find_value(<<"indep_hash">>, BlockStruct) of
+				undefined -> <<>>;
+				HeaderHash -> ar_util:decode(HeaderHash)
+			end,
 		txs =
 			lists:map(
 			fun (TX) when is_binary(TX) ->
@@ -227,7 +239,17 @@ json_struct_to_block({BlockStruct}) ->
 		weave_size = find_value(<<"weave_size">>, BlockStruct),
 		block_size = find_value(<<"block_size">>, BlockStruct),
 		cumulative_diff = CDiff,
-		hash_list_merkle = MR
+		hash_list_merkle = MR,
+		tx_root =
+			case find_value(<<"tx_root">>, BlockStruct) of
+				undefined -> <<>>;
+				Root -> ar_util:decode(Root)
+			end,
+		poa =
+			case find_value(<<"poa">>, BlockStruct) of
+				undefined -> undefined;
+				POAStruct -> json_struct_to_poa(POAStruct)
+			end
 	}.
 
 %% @doc Convert parsed JSON blocks fields from a HTTP request into a
@@ -299,6 +321,29 @@ tx_to_json_struct(
 			{reward, integer_to_binary(Reward)},
 			{signature, ar_util:encode(Sig)}
 		]
+	}.
+
+%% @doc Transform proofs of access into/out of JSON format.
+poa_to_json_struct(undefined) -> <<"undefined">>;
+poa_to_json_struct(POA) ->
+	[
+		{option, POA#poa.option},
+		{recall_block, block_to_json_struct(POA#poa.recall_block)},
+		{tx_path, ar_util:encode(POA#poa.tx_path)},
+		{tx, tx_to_json_struct(POA#poa.tx)},
+		{data_path, ar_util:encode(POA#poa.data_path)},
+		{chunk, ar_util:encode(POA#poa.chunk)}
+	].
+
+json_struct_to_poa(<<"undefined">>) -> undefined;
+json_struct_to_poa(JSONStruct) ->
+	#poa {
+		option = find_value(<<"option">>, JSONStruct),
+		recall_block = json_struct_to_block(find_value(<<"recall_block">>, JSONStruct)),
+		tx_path = ar_util:decode(find_value(<<"tx_path">>, JSONStruct)),
+		tx = json_struct_to_tx(find_value(<<"tx">>, JSONStruct)),
+		data_path = ar_util:decode(find_value(<<"data_path">>, JSONStruct)),
+		chunk = ar_util:decode(find_value(<<"chunk">>, JSONStruct))
 	}.
 
 %% @doc Transform merkle trees to and from JSON objects.
