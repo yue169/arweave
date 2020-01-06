@@ -376,11 +376,7 @@ process_new_block(#{ height := Height } = StateIn, BShadow, Recall, Peer)
 			StateNew = StateIn#{ wallet_list => NewB#block.wallet_list },
 			TXs = NewB#block.txs,
 			case ar_node_utils:validate(StateNew, NewB, TXs, B, RecallB) of
-				{invalid, Reason} ->
-					ar:info([
-						{could_not_validate_new_block, ar_util:encode(NewB#block.indep_hash)},
-						{reason, Reason}
-					]),
+				{invalid, _Reason} ->
 					maybe_fork_recover_at_height_plus_one(StateIn, NewB, Peer);
 				valid ->
 					TXReplayCheck = ar_tx_replay_pool:verify_block_txs(
@@ -398,6 +394,7 @@ process_new_block(#{ height := Height } = StateIn, BShadow, Recall, Peer)
 								process_new_block,
 								transaction_replay_detected,
 								{block_indep_hash, ar_util:encode(NewB#block.indep_hash)},
+								{block_header_hash, ar_util:encode(NewB#block.header_hash)},
 								{txs, lists:map(fun(TX) -> ar_util:encode(TX#tx.id) end, TXs)}
 							]),
 							none;

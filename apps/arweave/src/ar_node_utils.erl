@@ -407,7 +407,9 @@ integrate_new_block(
 	ar_miner_log:foreign_block(NewB#block.indep_hash),
 	ar:report_console(
 		[
-			{accepted_foreign_block, ar_util:encode(NewB#block.indep_hash)},
+			accepted_foreign_block,
+			{indep_hash, ar_util:encode(NewB#block.indep_hash)},
+			{header_hash, ar_util:encode(NewB#block.header_hash)},
 			{height, NewB#block.height}
 		]
 	),
@@ -511,6 +513,72 @@ validate(#{ hash_list := HashList, wallet_list := WalletList }, B, TXs, OldB, Re
 
 %% @doc Validate a new block, given a server state, a claimed new block, the last block,
 %% and the recall block.
+validate(
+		BI,
+		WalletList,
+		NewB =
+			#block {
+				hash_list = BI,
+				wallet_list = WalletList,
+				nonce = Nonce,
+				diff = Diff,
+				timestamp = Timestamp,
+				height = Height,
+				poa = POA
+			},
+		TXs,
+		OldB,
+		_,
+		RewardAddr,
+		Tags
+	) when Height >= ?FORK_2_0 ->
+	BDSHash = ar_weave:hash(
+		ar_block:generate_block_data_segment(OldB, POA, TXs, RewardAddr, Timestamp, Tags),
+		Nonce,
+		Height
+	),
+	{MicroSecs, Results} =
+		timer:tc(
+			fun() ->
+				[
+					{pow, ar_mine:validate(BDSHash, Diff, Height)},
+					{wallet_list, validate_wallet_list(WalletList)},
+					{txs, ar_tx:verify_txs(TXs, Diff, Height - 1, OldB#block.wallet_list, Timestamp)},
+					{tx_root, ar_block:verify_tx_root(NewB)},
+					{difficulty, ar_retarget:validate_difficulty(NewB, OldB)},
+					{header_hash, ar_weave:header_hash(NewB) == NewB#block.header_hash},
+					{dependent_hash, ar_block:verify_dep_hash(NewB, BDSHash)},
+					{weave_size, ar_block:verify_weave_size(NewB, OldB, TXs)},
+					{block_field_sizes, ar_block:block_field_size_limit(NewB)},
+					{height, ar_block:verify_height(NewB, OldB)},
+					{last_retarget, ar_block:verify_last_retarget(NewB, OldB)},
+					{previous_block, ar_block:verify_previous_block(NewB, OldB)},
+					{block_index, ar_block:verify_block_hash_list(NewB, OldB)},
+					{block_index_root, ar_block:verify_block_hash_list_merkle(NewB, OldB)},
+					{wallet_list2, ar_block:verify_wallet_list(NewB, OldB, undefined, TXs)},
+					{cumulative_difficulty, ar_block:verify_cumulative_diff(NewB, OldB)}
+				]
+			end
+		),
+	FailedTests = [ TestName || {TestName, Result} <- Results, Result =/= true ],
+	case FailedTests of
+		[] ->
+			ar:info(
+				[
+					{block_validation_successful, ar_util:encode(NewB#block.header_hash)},
+					{time_taken, MicroSecs}
+				]
+			),
+			valid;
+		_ ->
+			ar:info(
+				[
+					{block_validation_failed, ar_util:encode(NewB#block.header_hash)},
+					{time_taken, MicroSecs}
+				] ++ FailedTests
+			),
+			{invalid, FailedTests}
+	end;
 validate(_, _, NewB, _, _, _RecallB = unavailable, _, _) ->
 	ar:info([{recall_block_unavailable, ar_util:encode(NewB#block.indep_hash)}]),
 	{invalid, [recall_block_unavailable]};

@@ -5,6 +5,7 @@
 -export([verify_height/2, verify_last_retarget/2, verify_previous_block/2]).
 -export([verify_block_hash_list/2, verify_wallet_list/4, verify_weave_size/3]).
 -export([verify_cumulative_diff/2, verify_block_hash_list_merkle/2]).
+-export([verify_tx_root/1]).
 -export([hash_wallet_list/1]).
 -export([encrypt_block/2, encrypt_block/3]).
 -export([encrypt_full_block/2, encrypt_full_block/3]).
@@ -220,18 +221,31 @@ block_field_size_limit(B) ->
 		_ ->
 			10
 	end,
+	{ChunkSize, TXPathSize, DataPathSize} =
+		case B#block.poa of
+			undefined -> {0, 0, 0};
+			POA ->
+				{
+					byte_size((B#block.poa)#poa.chunk),
+					byte_size((B#block.poa)#poa.tx_path),
+					byte_size((B#block.poa)#poa.data_path)
+				}
+		end,
 	Check = (byte_size(B#block.nonce) =< 512) and
-	(byte_size(B#block.previous_block) =< 48) and
-	(byte_size(integer_to_binary(B#block.timestamp)) =< 12) and
-	(byte_size(integer_to_binary(B#block.last_retarget)) =< 12) and
-	(byte_size(integer_to_binary(B#block.diff)) =< DiffBytesLimit) and
-	(byte_size(integer_to_binary(B#block.height)) =< 20) and
-	(byte_size(B#block.hash) =< 48) and
-	(byte_size(B#block.indep_hash) =< 48) and
-	(byte_size(B#block.reward_addr) =< 32) and
-	(byte_size(list_to_binary(B#block.tags)) =< 2048) and
-	(byte_size(integer_to_binary(B#block.weave_size)) =< 64) and
-	(byte_size(integer_to_binary(B#block.block_size)) =< 64),
+		(byte_size(B#block.previous_block) =< 48) and
+		(byte_size(integer_to_binary(B#block.timestamp)) =< 12) and
+		(byte_size(integer_to_binary(B#block.last_retarget)) =< 12) and
+		(byte_size(integer_to_binary(B#block.diff)) =< DiffBytesLimit) and
+		(byte_size(integer_to_binary(B#block.height)) =< 20) and
+		(byte_size(B#block.hash) =< 48) and
+		(byte_size(B#block.indep_hash) =< 48) and
+		(byte_size(B#block.reward_addr) =< 32) and
+		(byte_size(list_to_binary(B#block.tags)) =< 2048) and
+		(byte_size(integer_to_binary(B#block.weave_size)) =< 64) and
+		(byte_size(integer_to_binary(B#block.block_size)) =< 64) and
+		(ChunkSize =< ?DATA_CHUNK_SIZE) and
+		(TXPathSize =< ?MAX_PATH_SIZE) and
+		(DataPathSize =< ?MAX_PATH_SIZE),
 	% Report of wrong field size.
 	case Check of
 		false ->
@@ -456,6 +470,9 @@ verify_indep_hash(Block = #block { indep_hash = Indep }) ->
 %% @doc Verify the dependent hash of a given block is valid
 verify_dep_hash(NewB, BDSHash) ->
 	NewB#block.hash == BDSHash.
+
+verify_tx_root(B) ->
+	B#block.tx_root == ar_merkle:generate_tree(B#block.txs).
 
 %% @doc Verify the block timestamp is not too far in the future nor too far in
 %% the past. We calculate the maximum reasonable clock difference between any

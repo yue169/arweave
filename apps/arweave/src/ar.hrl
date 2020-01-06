@@ -33,6 +33,7 @@
 %%% @deprecated Fork heights from 1.7 on are defined in the ar_fork module.
 -define(FORK_1_6, 95000).
 -endif.
+-define(FORK_2_0, 377000).
 
 %% @doc Default auto-update watch address.
 -define(DEFAULT_UPDATE_ADDR, "8L1NmHR2qY9wH-AqgsOmdw98FMwrdIzTS5-bJi9YDZ4").
@@ -262,6 +263,7 @@
 %% @doc Max size of a single data chunk, in bytes.
 %% 512KB should be enough -- future, please don't hate me.
 -define(DATA_CHUNK_SIZE, 512 * 1024).
+-define(MAX_PATH_SIZE, 256 * 1024).
 %% @doc The maximum size of the chunk hash list in bytes. Shorter chunk IDs
 %% (configurable by the user on a per-TX basis) give lower safety in terms of
 %% the potential for hash collisions, but higher transaction size limits.
