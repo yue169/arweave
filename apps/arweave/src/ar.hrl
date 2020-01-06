@@ -279,18 +279,19 @@
 	height = -1, % How many blocks have passed since the Genesis block?
 	hash = <<>>, % A hash of this block, the previous block and the recall block.
 	indep_hash = [], % A hash of this block JSON encoded. (TODO: Shouldn't it be a binary as it is a hash?)
+	header_hash = <<>>, % Hash of this block (for use in post-v2)
 	txs = [], % A list of tx records in full blocks, or a list of tx ids in block shadows.
 	tx_root = <<>>, % Merkle root of the tree of ordered TXs.
 	hash_list = unset, % A list of all previous indep hashes.
 	hash_list_merkle = <<>>, % The merkle root of the block's BHL.
-	wallet_list = [], % A map of wallet balances, or undefined.
+	wallet_list = [], % A map of wallet balances, the wallet list hash, or undefined.
     reward_addr = unclaimed, % Address to credit mining reward or unclaimed.
     tags = [], % Miner specified tags to store with the block.
 	reward_pool = 0, % Current pool of mining reward.
 	weave_size = 0, % Current size of the weave in bytes (counts tx data fields).
 	block_size = 0, % The size of the transactions inside this block.
 	cumulative_diff = 0, % The sum of the squared difficulty on the branch.
-	recall_chunk_selection = 1 % The recall chunk option that the miner has picked.
+	poa = undefined % The access proof used to generate this block.
 }).
 
 %% @doc A transaction, as stored in a block.

@@ -1,6 +1,6 @@
 -module(ar_weave).
 -export([init/0, init/1, init/2, init/3, add/1, add/2, add/3, add/4, add/6, add/7, add/11]).
--export([hash/3, indep_hash/1]).
+-export([hash/3, indep_hash/1, header_hash/1]).
 -export([verify_indep/2]).
 -export([generate_hash_list/1]).
 -export([is_data_on_block_list/2, is_tx_on_block_list/2]).
@@ -339,6 +339,38 @@ indep_hash(#block {
 			}
 		)
 	).
+
+%% @doc Create an independent hash from a block. Independent hashes
+%% verify a block's contents in isolation and are stored in a node's hash list.
+header_hash(B) ->
+	WLH =
+		case is_binary(B#block.wallet_list) of
+			false ->
+				ar_block:hash_wallet_list(B#block.wallet_list);
+			true ->
+				B#block.wallet_list
+		end,
+	ar_deep_hash:hash([
+		B#block.nonce,
+		B#block.previous_block,
+		integer_to_binary(B#block.timestamp),
+		integer_to_binary(B#block.last_retarget),
+		integer_to_binary(B#block.diff),
+		integer_to_binary(B#block.height),
+		B#block.hash,
+		B#block.hash_list_merkle,
+		B#block.tx_root,
+		WLH,
+		case B#block.reward_addr of
+			unclaimed -> <<"unclaimed">>;
+			_ -> B#block.reward_addr
+		end,
+		ar_tx:tags_to_list(B#block.tags),
+		integer_to_binary(B#block.reward_pool),
+		integer_to_binary(B#block.weave_size),
+		integer_to_binary(B#block.block_size),
+		integer_to_binary(B#block.cumulative_diff)
+	]).
 
 %% @doc Returns the transaction id
 tx_id(Id) when is_binary(Id) -> Id;
