@@ -9,16 +9,19 @@
 
 %% @doc Validate a complete proof of access object.
 validate(LastIndepHash, WeaveSize, BHL, POA) ->
-	ChallengeByte = calculate_challenge_byte(LastIndepHash, WeaveSize),
+	ChallengeByte = calculate_challenge_byte(LastIndepHash, WeaveSize, POA#poa.option),
 	ChallengeBlock = calculate_challenge_block(ChallengeByte, BHL),
 	case is_old_poa(ChallengeBlock, BHL) of
 		true -> validate_old_poa(BHL, POA);
-		false ->
-			validate_recall_block(ChallengeByte, ChallengeBlock, POA)
+		false -> validate_recall_block(ChallengeByte, ChallengeBlock, POA)
 	end.
 
-calculate_challenge_byte(LastIndepHash, WeaveSize) ->
-	binary:decode_unsigned(LastIndepHash) rem WeaveSize.
+calculate_challenge_byte(LastIndepHash, WeaveSize, Option) ->
+	binary:decode_unsigned(multihash(LastIndepHash, Option)) rem WeaveSize.
+
+multihash(X, Remaining) when Remaining =< 0 -> X;
+multihash(X, Remaining) ->
+	multihash(crypto:hash(?HASH_ALG, X), Remaining - 1).
 
 calculate_challenge_block(ChallengeByte, [{BH, WeaveSize}|_])
 		when WeaveSize > ChallengeByte -> BH;
