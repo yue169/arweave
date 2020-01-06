@@ -313,6 +313,7 @@
 
 %% @doc A succinct proof of access to a recall byte found in a TX.
 -record(poa, {
+	option, % The recall byte option chosen.
 	recall_block, % Header of the block that the TX containing the chunk is found in.
 	tx_path, % Path through the merkle tree of TXs in the block.
 	tx, % Header of the TX containing the required data chunk.
