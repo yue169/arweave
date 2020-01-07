@@ -138,11 +138,11 @@ slave_mine(Node) ->
 	slave_call(ar_node, mine, [Node]).
 
 wait_until_height(Node, TargetHeight) ->
-	{ok, BHL} = ar_util:do_until(
+	{ok, BI} = ar_util:do_until(
 		fun() ->
 			case ar_node:get_blocks(Node) of
-				BHL when length(BHL) - 1 == TargetHeight ->
-					{ok, BHL};
+				BI when length(BI) - 1 == TargetHeight ->
+					{ok, BI};
 				_ ->
 					false
 			end
@@ -150,24 +150,24 @@ wait_until_height(Node, TargetHeight) ->
 		100,
 		60 * 1000
 	),
-	BHL.
+	BI.
 
 slave_wait_until_height(Node, TargetHeight) ->
 	slave_call(?MODULE, wait_until_height, [Node, TargetHeight]).
 
 assert_slave_wait_until_height(Node, TargetHeight) ->
-	BHL = slave_call(?MODULE, wait_until_height, [Node, TargetHeight]),
-	?assert(is_list(BHL)),
-	BHL.
+	BI = slave_call(?MODULE, wait_until_height, [Node, TargetHeight]),
+	?assert(is_list(BI)),
+	BI.
 
-assert_wait_until_block_hash_list(Node, BHL) ->
-	?assertEqual(ok, wait_until_block_hash_list(Node, BHL)).
+assert_wait_until_block_hash_list(Node, BI) ->
+	?assertEqual(ok, wait_until_block_hash_list(Node, BI)).
 
-wait_until_block_hash_list(Node, BHL) ->
+wait_until_block_hash_list(Node, BI) ->
 	ar_util:do_until(
 		fun() ->
 			case ar_node:get_blocks(Node) of
-				BHL ->
+				BI ->
 					ok;
 				_ ->
 					false

@@ -93,9 +93,9 @@ start(Peers, TrustedPeers, TargetBShadow, HashList, Parent, BlockTXPairs) ->
 drop_until_diverge([X | R1], [X | R2]) -> drop_until_diverge(R1, R2);
 drop_until_diverge(R1, _) -> R1.
 
-get_block_txs_pairs(BlockTXPairs, BHL, TrustedPeers) ->
-	CutBlockTXPairs = cut_block_txs_pairs(BlockTXPairs, hd(BHL)),
-	case {length(BHL), length(CutBlockTXPairs)} of
+get_block_txs_pairs(BlockTXPairs, BI, TrustedPeers) ->
+	CutBlockTXPairs = cut_block_txs_pairs(BlockTXPairs, element(1, hd(BI))),
+	case {length(BI), length(CutBlockTXPairs)} of
 		{L, _} when L =< ?MAX_TX_ANCHOR_DEPTH ->
 			CutBlockTXPairs;
 		{_, ?MAX_TX_ANCHOR_DEPTH} ->
@@ -104,8 +104,8 @@ get_block_txs_pairs(BlockTXPairs, BHL, TrustedPeers) ->
 			CutBlockTXPairs ++
 			lists:map(
 				fun(Depth) ->
-					BH = lists:nth(Depth, BHL),
-					B = read_or_fetch_block(BH, BHL, TrustedPeers),
+					{BH, _} = lists:nth(Depth, BI),
+					B = read_or_fetch_block(BH, BI, TrustedPeers),
 					{BH, B#block.txs}
 				end,
 				lists:seq(L + 1, ?MAX_TX_ANCHOR_DEPTH)
@@ -119,10 +119,10 @@ cut_block_txs_pairs([], _) ->
 cut_block_txs_pairs([_ | Rest], BH) ->
 	cut_block_txs_pairs(Rest, BH).
 
-read_or_fetch_block(BH, BHL, TrustedPeers) ->
-	case ar_storage:read_block(BH, BHL) of
+read_or_fetch_block(BH, BI, TrustedPeers) ->
+	case ar_storage:read_block(BH, BI) of
 		unavailable ->
-			ar_node_utils:get_full_block(TrustedPeers, BH, BHL);
+			ar_node_utils:get_full_block(TrustedPeers, BH, BI);
 		B ->
 			B
 	end.
@@ -177,21 +177,27 @@ do_fork_recover(S = #state {
 		peers = Peers,
 		hash_list = [NextH | HashList],
 		target_block = TargetB,
-		recovery_hash_list = BHL,
+		recovery_hash_list = BI,
 		parent = Parent,
 		block_txs_pairs = BlockTXPairs
 	}) ->
 	receive
 	{update_target_block, Block, Peer} ->
-		NewBHL = [Block#block.indep_hash | Block#block.hash_list],
+		NewBI =
+			[
+				{
+					Block#block.indep_hash,
+					Block#block.weave_size + Block#block.block_size
+				}
+			| Block#block.hash_list],
 		% If the new retarget blocks hashlist contains the hash of the last
 		% retarget should be recovering to the same fork.
 		NewToVerify =
-			case lists:member(TargetB#block.indep_hash, NewBHL) of
+			case lists:member(TargetB#block.indep_hash, NewBI) of
 				true ->
 					ar:info([encountered_block_on_same_fork_as_recovery_process]),
 					drop_until_diverge(
-						lists:reverse(NewBHL),
+						lists:reverse(NewBI),
 						lists:reverse(BlockList)
 					);
 				false ->
@@ -222,7 +228,7 @@ do_fork_recover(S = #state {
 						hash_list = NewToVerify,
 						peers = NewPeers,
 						target_block = Block,
-						recovery_hash_list = NewBHL
+						recovery_hash_list = NewBI
 					}
 				);
 			false ->
@@ -236,7 +242,7 @@ do_fork_recover(S = #state {
 				server(S)
 		end;
 	apply_next_block ->
-		NextB = ar_node_utils:get_full_block(Peers, NextH, BHL),
+		NextB = ar_node_utils:get_full_block(Peers, NextH, BI),
 		ar:info(
 			[
 				{applying_fork_recovery, ar_util:encode(NextH)}
@@ -298,7 +304,7 @@ do_fork_recover(S = #state {
 					% Target block is within range and isi attempted to be
 					% recovered to.
 					{_X, _Y} ->
-						B = ar_node:get_block(Peers, NextB#block.previous_block, BHL),
+						B = ar_node:get_block(Peers, NextB#block.previous_block, BI),
 						case ?IS_BLOCK(B) of
 							false ->
 								BHashList = unavailable,
@@ -307,8 +313,8 @@ do_fork_recover(S = #state {
 							true ->
 								BHashList = [B#block.indep_hash|B#block.hash_list],
 								case B#block.height of
-									0 -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, NextB#block.hash_list), BHL);
-									_ -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, B#block.hash_list), BHL)
+									0 -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, NextB#block.hash_list), BI);
+									_ -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, B#block.hash_list), BI)
 								end,
 								%% TODO: Rewrite validate so it also takes recall block txs
 								TXs = NextB#block.txs

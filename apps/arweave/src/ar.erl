@@ -207,8 +207,8 @@ parse_cli_args(["load_mining_key", File|Rest], C) ->
 	parse_cli_args(Rest, C#config { load_key = File });
 parse_cli_args(["ipfs_pin" | Rest], C) ->
 	parse_cli_args(Rest, C#config { ipfs_pin = true });
-parse_cli_args(["start_hash_list", BHLHash|Rest], C) ->
-	parse_cli_args(Rest, C#config { start_hash_list = ar_util:decode(BHLHash) });
+parse_cli_args(["start_block_index", BIHash|Rest], C) ->
+	parse_cli_args(Rest, C#config { start_hash_list = ar_util:decode(BIHash) });
 parse_cli_args(["benchmark", Algorithm|Rest], C)->
 	parse_cli_args(Rest, C#config { benchmark = true, benchmark_algorithm = list_to_atom(Algorithm) });
 parse_cli_args(["auto_update", "false" | Rest], C) ->
@@ -277,7 +277,7 @@ start(
 		pause = Pause,
 		disk_space = DiskSpace,
 		used_space = UsedSpace,
-		start_hash_list = BHL,
+		start_hash_list = BI,
 		auto_update = AutoUpdate,
 		internal_api_secret = InternalApiSecret,
 		enable = Enable,
@@ -393,13 +393,13 @@ start(
 		[
 			[
 				Peers,
-				case BHL of
+				case BI of
 					undefined ->
 						if Init -> ar_weave:init(ar_util:genesis_wallets(), Diff);
 						true -> not_joined
 						end;
 					_ ->
-						ar_storage:read_block_hash_list(BHL)
+						ar_storage:read_block_hash_list(BI)
 				end,
 				0,
 				MiningAddress,

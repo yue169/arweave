@@ -458,25 +458,25 @@ add_external_block_with_bad_bds_test_() ->
 			ar_storage:clear(),
 			ar_blacklist_middleware:reset(),
 			[B0] = ar_weave:init([]),
-			BHL0 = [B0#block.indep_hash],
+			BI0 = [{B0#block.indep_hash,0}],
 			NodeWithBridge = ar_node:start([], [B0]),
 			Bridge = ar_bridge:start([], NodeWithBridge, ?DEFAULT_HTTP_IFACE_PORT),
 			OtherNode = ar_node:start([], [B0]),
 			timer:sleep(500),
 			ar_http_iface_server:reregister(http_bridge_node, Bridge),
 			ar_http_iface_server:reregister(http_entrypoint_node, NodeWithBridge),
-			{BHL0, {NodeWithBridge, {127, 0, 0, 1, 1984}}, OtherNode}
+			{BI0, {NodeWithBridge, {127, 0, 0, 1, 1984}}, OtherNode}
 		end,
-		BlocksFromStorage = fun(BHL) ->
-			B = ar_storage:read_block(hd(BHL), BHL),
-			RecallB = ar_node_utils:find_recall_block(BHL),
+		BlocksFromStorage = fun(BI) ->
+			B = ar_storage:read_block(element(1, hd(BI)), BI),
+			RecallB = ar_node_utils:find_recall_block(BI),
 			{B, RecallB}
 		end,
-		{BHL0, {RemoteNode, RemotePeer}, LocalNode} = Setup(),
-		BHL1 = mine_one_block(LocalNode, BHL0),
-		?assertMatch(BHL0, ar_node:get_blocks(RemoteNode)),
-		{_, RecallB0} = BlocksFromStorage(BHL0),
-		{B1, _} = BlocksFromStorage(BHL1),
+		{BI0, {RemoteNode, RemotePeer}, LocalNode} = Setup(),
+		BI1 = mine_one_block(LocalNode, BI0),
+		?assertMatch(BI0, ar_node:get_blocks(RemoteNode)),
+		{_, RecallB0} = BlocksFromStorage(BI0),
+		{B1, _} = BlocksFromStorage(BI1),
 		?assertMatch(
 			{ok, {{<<"200">>, _}, _, _, _, _}},
 			send_new_block(
@@ -528,19 +528,19 @@ add_external_block_with_invalid_timestamp_test() ->
 		ar_storage:clear(),
 		ar_blacklist_middleware:reset(),
 		[B0] = ar_weave:init([]),
-		BHL0 = [B0#block.indep_hash],
+		BI0 = [{B0#block.indep_hash, 0}],
 		NodeWithBridge = ar_node:start([], [B0]),
 		Bridge = ar_bridge:start([], NodeWithBridge, ?DEFAULT_HTTP_IFACE_PORT),
 		OtherNode = ar_node:start([], [B0]),
 		timer:sleep(500),
 		ar_http_iface_server:reregister(http_bridge_node, Bridge),
 		ar_http_iface_server:reregister(http_entrypoint_node, NodeWithBridge),
-		{BHL0, {127, 0, 0, 1, 1984}, OtherNode}
+		{BI0, {127, 0, 0, 1, 1984}, OtherNode}
 	end,
-	{BHL0, RemotePeer, LocalNode} = Setup(),
-	BHL1 = mine_one_block(LocalNode, BHL0),
-	B1 = ar_storage:read_block(hd(BHL1), BHL1),
-	RecallB0 = ar_node_utils:find_recall_block(BHL0),
+	{BI0, RemotePeer, LocalNode} = Setup(),
+	BI1 = mine_one_block(LocalNode, BI0),
+	B1 = ar_storage:read_block(hd(BI1), BI1),
+	RecallB0 = ar_node_utils:find_recall_block(BI0),
 	%% Expect the timestamp too far from the future to be rejected
 	FutureTimestampTolerance = ?JOIN_CLOCK_TOLERANCE * 2 + ?CLOCK_DRIFT_MAX,
 	TooFarFutureTimestamp = os:system_time(second) + FutureTimestampTolerance + 3,
@@ -685,17 +685,17 @@ fork_recover_by_http_test() ->
 	Node2 = ar_node:start([], [B0]),
 	timer:sleep(500),
 	ar_http_iface_server:reregister(Node1),
-	BHL0 = [B0#block.indep_hash],
-	FullBHL = mine_n_blocks(Node2, BHL0, 10),
+	BI0 = [{B0#block.indep_hash, 0}],
+	FullBI = mine_n_blocks(Node2, BI0, 10),
 	%% Send only the latest block to Node1 and let it fork recover up to it.
 	?assertMatch(
 		{ok, {{<<"200">>, _}, _, _, _, _}},
 		send_new_block(
 			{127, 0, 0, 1, 1984},
-			ar_storage:read_block(hd(FullBHL), FullBHL)
+			ar_storage:read_block(hd(FullBI), FullBI)
 		)
 	),
-	ar_test_node:wait_until_block_hash_list(Node1, FullBHL).
+	ar_test_node:wait_until_block_hash_list(Node1, FullBI).
 
 %% @doc Post a tx to the network and ensure that last_tx call returns the ID of last tx.
 add_tx_and_get_last_test() ->
@@ -1348,17 +1348,17 @@ get_wallet_deposits_test_() ->
 
 %% Utility functions
 
-mine_n_blocks(_, BHL, 0) ->
-	BHL;
-mine_n_blocks(Node, PreMineBHL, N) ->
-	PostMineBHL = mine_one_block(Node, PreMineBHL),
-	mine_n_blocks(Node, PostMineBHL, N - 1).
+mine_n_blocks(_, BI, 0) ->
+	BI;
+mine_n_blocks(Node, PreMineBI, N) ->
+	PostMineBI = mine_one_block(Node, PreMineBI),
+	mine_n_blocks(Node, PostMineBI, N - 1).
 
-mine_one_block(Node, PreMineBHL) ->
+mine_one_block(Node, PreMineBI) ->
 	ar_node:mine(Node),
-	PostMineBHL = ar_test_node:wait_until_height(Node, length(PreMineBHL)),
-	?assertMatch([_ | PreMineBHL], PostMineBHL),
-	PostMineBHL.
+	PostMineBI = ar_test_node:wait_until_height(Node, length(PreMineBI)),
+	?assertMatch([_ | PreMineBI], PostMineBI),
+	PostMineBI.
 
 send_new_block(Peer, B) ->
 	PreviousRecallB = ar_node_utils:find_recall_block(B#block.hash_list),

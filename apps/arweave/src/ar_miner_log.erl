@@ -10,7 +10,7 @@
 %%% a candidate block is mined, it will also log when candidate blocks appear
 %%% to have been accepted by the wider network.
 
-%% @doc The period to wait between checking the state of a block in the BHL.
+%% @doc The period to wait between checking the state of a block in the BI.
 
 -ifdef(DEBUG).
 -define(BLOCK_CHECK_TIME, 100).
@@ -118,9 +118,9 @@ current_block_height() ->
 
 %% @doc Worker process for checking the status of candidate blocks.
 worker(BH, InitBlockHeight) ->
-	BHL = ar_node:get_hash_list(whereis(http_entrypoint_node)),
-	case ar_util:index_of(BH, BHL) of
-		not_found when length(BHL) >= InitBlockHeight + ?STORE_BLOCKS_BEHIND_CURRENT ->
+	BI = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+	case ar_util:index_of(BH, ?BI_TO_BHL(BI)) of
+		not_found when length(BI) >= InitBlockHeight + ?STORE_BLOCKS_BEHIND_CURRENT ->
 			ok;
 		Depth when is_integer(Depth) andalso Depth >= ?CONFIRMATION_DEPTH ->
 			accepted_block(BH),

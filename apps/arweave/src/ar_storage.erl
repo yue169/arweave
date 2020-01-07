@@ -181,23 +181,24 @@ write_encrypted_block(Hash, B) ->
 -endif.
 
 %% @doc Read a block from disk, given a hash.
-read_block(unavailable, _BHL) -> unavailable;
-read_block(B, _BHL) when is_record(B, block) -> B;
-read_block(Bs, BHL) when is_list(Bs) ->
-	lists:map(fun(B) -> read_block(B, BHL) end, Bs);
-read_block(ID, BHL) ->
+read_block(unavailable, _BI) -> unavailable;
+read_block(B, _BI) when is_record(B, block) -> B;
+read_block(Bs, BI) when is_list(Bs) ->
+	lists:map(fun(B) -> read_block(B, BI) end, Bs);
+read_block({ID, _}, BI) -> read_block(ID, BI);
+read_block(ID, BI) ->
 	case ar_block_index:get_block_filename(ID) of
 		unavailable -> unavailable;
-		Filename -> read_block_file(Filename, BHL)
+		Filename -> read_block_file(Filename, BI)
 	end.
 
-read_block_file(Filename, BHL) ->
+read_block_file(Filename, BI) ->
 	{ok, Binary} = file:read_file(Filename),
 	B = ar_serialize:json_struct_to_block(Binary),
 	WL = B#block.wallet_list,
 	FinalB =
 		B#block {
-			hash_list = ar_block:generate_hash_list_for_block(B, BHL),
+			hash_list = ar_block:generate_hash_list_for_block(B, BI),
 			wallet_list =
 				case WL of
 					WL when is_list(WL) ->
@@ -360,9 +361,9 @@ read_tx_file(Filename) ->
 	ar_serialize:json_struct_to_tx(Binary).
 
 %% Write a block hash list to disk for retreival later (in emergencies).
-write_block_hash_list(Hash, BHL) ->
+write_block_hash_list(Hash, BI) ->
 	ar:report([{writing_block_hash_list_to_disk, ID = ar_util:encode(Hash)}]),
-	JSON = ar_serialize:jsonify(ar_serialize:hash_list_to_json_struct(BHL)),
+	JSON = ar_serialize:jsonify(ar_serialize:hash_list_to_json_struct(BI)),
 	file:write_file(hash_list_filepath(Hash), JSON),
 	ID.
 
@@ -566,8 +567,8 @@ store_and_retrieve_block_hash_list_test() ->
 	[B2|_] = ar_weave:add(B1s, []),
 	write_block_hash_list(ID, B2#block.hash_list),
 	receive after 500 -> ok end,
-	BHL = read_block_hash_list(ID),
-	BHL = B2#block.hash_list.
+	BI = read_block_hash_list(ID),
+	BI = B2#block.hash_list.
 
 store_and_retrieve_wallet_list_test() ->
 	[B0] = ar_weave:init(),

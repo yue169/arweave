@@ -78,11 +78,11 @@ create_poa_from_data(NoTreeB, NoTreeTX, ChallengeByte, Option) ->
 	}.
 
 %% @doc Validate a complete proof of access object.
-validate(LastHeaderHash, WeaveSize, BHL, POA) ->
+validate(LastHeaderHash, WeaveSize, BI, POA) ->
 	ChallengeByte = calculate_challenge_byte(LastHeaderHash, WeaveSize, POA#poa.option),
-	ChallengeBlock = find_byte_in_size_tagged_list(ChallengeByte, BHL),
-	case is_old_poa(ChallengeBlock, BHL) of
-		true -> validate_old_poa(BHL, POA);
+	ChallengeBlock = find_byte_in_size_tagged_list(ChallengeByte, BI),
+	case is_old_poa(ChallengeBlock, BI) of
+		true -> validate_old_poa(BI, POA);
 		false -> validate_recall_block(ChallengeByte, ChallengeBlock, POA)
 	end.
 
@@ -98,12 +98,12 @@ find_byte_in_size_tagged_list(Byte, [{ID, Size}|_])
 find_byte_in_size_tagged_list(Byte, [_|Rest]) ->
 	find_byte_in_size_tagged_list(Byte, Rest).
 
-calculate_block_height(BH, [{BH, _}|_BHL]) -> 0;
-calculate_block_height(BH, [_|BHL]) ->
-	calculate_block_height(BH, BHL).
+calculate_block_height(BH, [{BH, _}|_BI]) -> 0;
+calculate_block_height(BH, [_|BI]) ->
+	calculate_block_height(BH, BI).
 
-is_old_poa(ChallengeBlock, BHL) ->
-	calculate_block_height(ChallengeBlock, BHL) =< ar_fork:height_2_0().
+is_old_poa(ChallengeBlock, BI) ->
+	calculate_block_height(ChallengeBlock, BI) =< ar_fork:height_2_0().
 
 validate_old_poa(_, _) ->
 	error(not_implemented).

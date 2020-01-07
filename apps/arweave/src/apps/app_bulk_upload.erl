@@ -172,15 +172,15 @@ mine_blocks(Node, Total, Mined) ->
 	end.
 
 wait_for_blocks(Node, ExpectedLength) ->
-	BHL = ar_node:get_hash_list(Node),
-	case length(BHL) < ExpectedLength of
+	BI = ar_node:get_hash_list(Node),
+	case length(BI) < ExpectedLength of
 		true ->
 			%% A relatively big interval is used here to give app_queue some time
 			%% to post transactions.
 			timer:sleep(1000),
 			wait_for_blocks(Node, ExpectedLength);
 		false ->
-			BHL
+			BI
 	end.
 
 assert_transactions(Transactions) ->

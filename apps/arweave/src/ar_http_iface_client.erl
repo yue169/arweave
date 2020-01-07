@@ -116,8 +116,8 @@ add_peer(Peer) ->
 %% @doc Get a peers current, top block.
 get_current_block(Peer) ->
 	get_current_block(Peer, get_hash_list(Peer)).
-get_current_block(Peer, BHL) ->
-	case get_full_block([Peer], hd(BHL), BHL) of
+get_current_block(Peer, BI) ->
+	case get_full_block([Peer], hd(BI), BI) of
 		{_Peer, B} ->
 			B;
 		Error ->
@@ -125,8 +125,8 @@ get_current_block(Peer, BHL) ->
 	end.
 
 %% @doc Retreive a block by height or hash from a remote peer.
-get_block(Peer, ID, BHL) ->
-	case get_full_block([Peer], ID, BHL) of
+get_block(Peer, ID, BI) ->
+	case get_full_block([Peer], ID, BI) of
 		{_Peer, B} ->
 			B;
 		Error ->
@@ -174,9 +174,9 @@ prepare_block_id(ID) when is_integer(ID) ->
 
 %% @doc Retreive a full block (full transactions included in body)
 %% by hash from remote peers.
-get_full_block([], _ID, _BHL) ->
+get_full_block([], _ID, _BI) ->
 	unavailable;
-get_full_block(Peers, ID, BHL) ->
+get_full_block(Peers, ID, BI) ->
 	Peer = lists:nth(rand:uniform(min(5, length(Peers))), Peers),
 	case handle_block_response(
 		Peer,
@@ -189,12 +189,12 @@ get_full_block(Peers, ID, BHL) ->
 			[],
 			10 * 1000
 		),
-		{full_block, BHL}
+		{full_block, BI}
 	) of
 		unavailable ->
-			get_full_block(Peers -- [Peer], ID, BHL);
+			get_full_block(Peers -- [Peer], ID, BI);
 		not_found ->
-			get_full_block(Peers -- [Peer], ID, BHL);
+			get_full_block(Peers -- [Peer], ID, BI);
 		B ->
 			{Peer, B}
 	end.
@@ -521,8 +521,8 @@ handle_block_response(Peer, _Peers, {ok, {{<<"200">>, _}, _, Body, _, _}}, block
 		Handled ->
 			Handled
 	end;
-handle_block_response(Peer, Peers, {ok, {{<<"200">>, _}, _, Body, _, _}}, {full_block, BHL}) ->
-	case catch reconstruct_full_block(Peer, Peers, Body, BHL) of
+handle_block_response(Peer, Peers, {ok, {{<<"200">>, _}, _, Body, _, _}}, {full_block, BI}) ->
+	case catch reconstruct_full_block(Peer, Peers, Body, BI) of
 		{'EXIT', Reason} ->
 			ar:info([
 				"Failed to parse block response.",
@@ -537,7 +537,7 @@ handle_block_response(_, _, Response, _) ->
 	ar:warn([{unexpected_block_response, Response}]),
 	unavailable.
 
-reconstruct_full_block(Peer, Peers, Body, BHL) ->
+reconstruct_full_block(Peer, Peers, Body, BI) ->
 	B = ar_serialize:json_struct_to_block(Body),
 	case ?IS_BLOCK(B) of
 		true ->
@@ -555,7 +555,7 @@ reconstruct_full_block(Peer, Peers, Body, BHL) ->
 			HashList =
 				case B#block.hash_list of
 					unset ->
-						ar_block:generate_hash_list_for_block(B, BHL);
+						ar_block:generate_hash_list_for_block(B, BI);
 					HL -> HL
 				end,
 			MempoolTXs = ar_node:get_pending_txs(whereis(http_entrypoint_node)),

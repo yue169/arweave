@@ -302,7 +302,7 @@ ar:err(
 ### Don't log huge messages
 Avoid logging huge messages. Truncate arguments, e.g. with `~P` like this:
 ```erlang
-ar:warn("Invalid Block Hash List: ~P", [BHL, 100]),
+ar:warn("Invalid Block Hash List: ~P", [BI, 100]),
 ```
 
 

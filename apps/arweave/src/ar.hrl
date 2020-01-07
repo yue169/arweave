@@ -286,7 +286,7 @@
 	tx_root = <<>>, % Merkle root of the tree of ordered TXs.
 	tx_tree = [], % The tree data structure of TXs. Not stored.
 	hash_list = unset, % A list of all previous indep hashes.
-	hash_list_merkle = <<>>, % The merkle root of the block's BHL.
+	hash_list_merkle = <<>>, % The merkle root of the block's BI.
 	wallet_list = [], % A map of wallet balances, the wallet list hash, or undefined.
     reward_addr = unclaimed, % Address to credit mining reward or unclaimed.
     tags = [], % Miner specified tags to store with the block.
@@ -362,6 +362,9 @@
 
 %% @doc A Macro to return whether an object is a block.
 -define(IS_BLOCK(X), (is_record(X, block))).
+
+%% @doc Convert a v2.0 block index into an old style block hash list.
+-define(BI_TO_BHL(XBI), ([ XBH || {XBH, _} <- XBI ])).
 
 %% @doc A Macro to return whether a value is an address.
 -define(IS_ADDR(Addr), (is_binary(Addr) and (bit_size(Addr) == ?HASH_SZ))).

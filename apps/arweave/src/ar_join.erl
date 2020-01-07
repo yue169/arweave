@@ -129,14 +129,14 @@ find_current_block([Peer|Tail]) ->
 	try ar_node:get_hash_list(Peer) of
 		[] ->
 			find_current_block(Tail);
-		BHL ->
-			Hash = hd(BHL),
+		BI ->
+			{Hash, _} = hd(BI),
 			ar:info([
 				"Fetching current block.",
 				{peer, Peer},
 				{hash, Hash}
 			]),
-			MaybeB = ar_node_utils:get_full_block(Peer, Hash, BHL),
+			MaybeB = ar_node_utils:get_full_block(Peer, Hash, BI),
 			case MaybeB of
 				Atom when is_atom(Atom) ->
 					ar:info([
@@ -264,33 +264,33 @@ get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs) ->
 	end.
 
 %% @doc Fills node to capacity based on weave storage limit.
-fill_to_capacity(Peers, ToWrite) -> fill_to_capacity(Peers, ToWrite, ToWrite).
+fill_to_capacity(Peers, BI) -> fill_to_capacity(Peers, ?BI_TO_BI(BI), BI).
 fill_to_capacity(_, [], _) -> ok;
-fill_to_capacity(Peers, ToWrite, BHL) ->
+fill_to_capacity(Peers, ToWrite, BI) ->
 	timer:sleep(1 * 1000),
 	RandHash = lists:nth(rand:uniform(length(ToWrite)), ToWrite),
-	case ar_storage:read_block(RandHash, BHL) of
+	case ar_storage:read_block(RandHash, BI) of
 		unavailable ->
-			fill_to_capacity2(Peers, RandHash, ToWrite, BHL);
+			fill_to_capacity2(Peers, RandHash, ToWrite, BI);
 		_ ->
 			fill_to_capacity(
 				Peers,
 				lists:delete(RandHash, ToWrite),
-				BHL
+				BI
 			)
 	end.
 
-fill_to_capacity2(Peers, RandHash, ToWrite, BHL) ->
+fill_to_capacity2(Peers, RandHash, ToWrite, BI) ->
 	B =
 		try
-			ar_node_utils:get_full_block(Peers, RandHash, BHL)
+			ar_node_utils:get_full_block(Peers, RandHash, BI)
 		catch _:_ ->
 			unavailable
 		end,
 	case B of
 		unavailable ->
 			timer:sleep(3000),
-			fill_to_capacity(Peers, ToWrite, BHL);
+			fill_to_capacity(Peers, ToWrite, BI);
 		B ->
 			case ar_storage:write_full_block(B) of
 				{error, _} -> disk_full;
@@ -298,7 +298,7 @@ fill_to_capacity2(Peers, RandHash, ToWrite, BHL) ->
 					fill_to_capacity(
 						Peers,
 						lists:delete(RandHash, ToWrite),
-						BHL
+						BI
 					)
 			end
 	end.

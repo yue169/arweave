@@ -113,8 +113,8 @@ poll_block_step(construct_hash_list, {Peer, BShadow}) ->
 	{ok, BlockTXsPairs} = ar_node:get_block_txs_pairs(Node),
 	HL = lists:map(fun({BH, _}) -> BH end, BlockTXsPairs),
 	case reconstruct_block_hash_list(Peer, BShadow, HL) of
-		{ok, BHL} ->
-			poll_block_step(accept_block, {Peer, BShadow#block{ hash_list = BHL }});
+		{ok, BI} ->
+			poll_block_step(accept_block, {Peer, BShadow#block{ hash_list = BI }});
 		{error, _} = Error ->
 			Error
 	end;

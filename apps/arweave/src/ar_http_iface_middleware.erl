@@ -176,8 +176,8 @@ handle(<<"GET">>, [<<"tx">>, Hash, <<"status">>], Req, _Pid) ->
 						{<<"block_height">>, Height},
 						{<<"block_indep_hash">>, EncodedIndepHash}
 					],
-					CurrentBHL = ar_node:get_hash_list(whereis(http_entrypoint_node)),
-					case lists:member(ar_util:decode(EncodedIndepHash), CurrentBHL) of
+					CurrentBI = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+					case lists:member(ar_util:decode(EncodedIndepHash), CurrentBI) of
 						false ->
 							{404, #{}, <<"Not Found.">>, Req};
 						true ->
@@ -469,12 +469,12 @@ handle(<<"GET">>, [<<"tx_anchor">>], Req, _Pid) ->
 	case ar_node:get_hash_list(whereis(http_entrypoint_node)) of
 		[] ->
 			{400, #{}, <<"The node has not joined the network yet.">>, Req};
-		BHL when is_list(BHL) ->
+		BI when is_list(BI) ->
 			{
 				200,
 				#{},
 				ar_util:encode(
-					lists:nth(min(length(BHL), (?MAX_TX_ANCHOR_DEPTH)) div 2 + 1, BHL)
+					lists:nth(min(length(BI), (?MAX_TX_ANCHOR_DEPTH)) div 2 + 1, BI)
 				),
 				Req
 			}
@@ -579,8 +579,8 @@ handle(<<"GET">>, [<<"block">>, Type, ID], Req, _Pid) ->
 					{426, #{}, <<"Client version incompatible.">>, Req};
 				{_, <<"1">>} ->
 					% Supprt for legacy nodes (pre-1.5).
-					BHL = ar_node:get_hash_list(whereis(http_entrypoint_node)),
-					try ar_storage:read_block_file(Filename, BHL) of
+					BI = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+					try ar_storage:read_block_file(Filename, BI) of
 						B ->
 							{JSONStruct} =
 								ar_serialize:block_to_json_struct(
@@ -1207,8 +1207,8 @@ post_block_reject_warn(BShadow, Step, Peer, Params) ->
 
 %% @doc Return the block hash list associated with a block.
 process_request(get_block, [Type, ID, <<"hash_list">>], Req) ->
-	CurrentBHL = ar_node:get_hash_list(whereis(http_entrypoint_node)),
-	case is_block_known(Type, ID, CurrentBHL) of
+	CurrentBI = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+	case is_block_known(Type, ID, CurrentBI) of
 		true ->
 			Hash =
 				case Type of
@@ -1216,15 +1216,15 @@ process_request(get_block, [Type, ID, <<"hash_list">>], Req) ->
 						B =
 							ar_node:get_block(whereis(http_entrypoint_node),
 							ID,
-							CurrentBHL),
+							CurrentBI),
 						B#block.indep_hash;
 					<<"hash">> -> ID
 				end,
-			BlockBHL = ar_block:generate_hash_list_for_block(Hash, CurrentBHL),
+			BlockBI = ar_block:generate_hash_list_for_block(Hash, CurrentBI),
 			{200, #{},
 				ar_serialize:jsonify(
 					ar_serialize:hash_list_to_json_struct(
-						BlockBHL
+						BlockBI
 					)
 				),
 			Req};
@@ -1235,11 +1235,11 @@ process_request(get_block, [Type, ID, <<"hash_list">>], Req) ->
 %% or height).
 process_request(get_block, [Type, ID, <<"wallet_list">>], Req) ->
 	HTTPEntryPointPid = whereis(http_entrypoint_node),
-	CurrentBHL = ar_node:get_hash_list(HTTPEntryPointPid),
-	case is_block_known(Type, ID, CurrentBHL) of
+	CurrentBI = ar_node:get_hash_list(HTTPEntryPointPid),
+	case is_block_known(Type, ID, CurrentBI) of
 		false -> {404, #{}, <<"Block not found.">>, Req};
 		true ->
-			B = find_block(Type, ID, CurrentBHL),
+			B = find_block(Type, ID, CurrentBI),
 			case ?IS_BLOCK(B) of
 				true ->
 					{200, #{},
@@ -1260,10 +1260,10 @@ process_request(get_block, [Type, ID, <<"wallet_list">>], Req) ->
 %%				txs | hash_list | wallet_list | reward_addr | tags | reward_pool }
 %%
 process_request(get_block, [Type, ID, Field], Req) ->
-	CurrentBHL = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+	CurrentBI = ar_node:get_hash_list(whereis(http_entrypoint_node)),
 	case ar_meta_db:get(subfield_queries) of
 		true ->
-			case find_block(Type, ID, CurrentBHL) of
+			case find_block(Type, ID, CurrentBI) of
 				unavailable ->
 					{404, #{}, <<"Not Found.">>, Req};
 				B ->
@@ -1288,24 +1288,24 @@ validate_get_block_type_id(<<"hash">>, ID) ->
 		{error, invalid} -> {error, {400, #{}, <<"Invalid hash.">>}}
 	end.
 
-%% @doc Take a block type specifier, an ID, and a BHL, returning whether the
-%% given block is part of the BHL.
-is_block_known(<<"height">>, RawHeight, BHL) when is_binary(RawHeight) ->
-	is_block_known(<<"height">>, binary_to_integer(RawHeight), BHL);
-is_block_known(<<"height">>, Height, BHL) ->
-	Height < length(BHL);
-is_block_known(<<"hash">>, ID, BHL) ->
-	lists:member(ID, BHL).
+%% @doc Take a block type specifier, an ID, and a BI, returning whether the
+%% given block is part of the BI.
+is_block_known(<<"height">>, RawHeight, BI) when is_binary(RawHeight) ->
+	is_block_known(<<"height">>, binary_to_integer(RawHeight), BI);
+is_block_known(<<"height">>, Height, BI) ->
+	Height < length(BI);
+is_block_known(<<"hash">>, ID, BI) ->
+	lists:member(ID, BI).
 
 %% @doc Find a block, given a type and a specifier.
-find_block(<<"height">>, RawHeight, BHL) ->
+find_block(<<"height">>, RawHeight, BI) ->
 	ar_node:get_block(
 		whereis(http_entrypoint_node),
 		binary_to_integer(RawHeight),
-		BHL
+		BI
 	);
-find_block(<<"hash">>, ID, BHL) ->
-	ar_storage:read_block(ID, BHL).
+find_block(<<"hash">>, ID, BI) ->
+	ar_storage:read_block(ID, BI).
 
 post_tx_parse_id({Req, Pid}) ->
 	post_tx_parse_id(check_header, {Req, Pid}).

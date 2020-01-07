@@ -4,7 +4,7 @@
 -include("../ar.hrl").
 
 -record(state, {
-	bhl,
+	bi,
 	peers
 }).
 
@@ -16,30 +16,30 @@ export_blocks([Filename, HeightStart, HeightEnd]) ->
 
 export_blocks(Filename, {HeightStart, HeightEnd}) ->
 	case get_hash_list(HeightEnd) of
-		{ok, BHL} ->
+		{ok, BI} ->
 			Peers = ar_bridge:get_remote_peers(whereis(http_bridge_node)),
-			export_blocks(Filename, {HeightStart, HeightEnd}, BHL, take(Peers, 10));
+			export_blocks(Filename, {HeightStart, HeightEnd}, BI, take(Peers, 10));
 		Error ->
 			Error
 	end.
 
-export_blocks(Filename, Range, BHL, Peers) ->
+export_blocks(Filename, Range, BI, Peers) ->
 	Columns = ["Height", "Block ID", "Timestamp", "Block Size (Bytes)", "Difficulty", "Cumulative Difficulty",
 				"Reward Address", "Weave Size (Bytes)", "TXs", "TX Reward Sum (AR)", "Inflation Reward (AR)",
 				"TX Mining Reward (AR)", "TX Reward Pool (AR)", "Calculated TX Reward Pool (AR)"],
 	case init_csv(Filename, Columns) of
 		{ok, IoDevice} ->
-			export_blocks1(Range, Peers, BHL, IoDevice);
+			export_blocks1(Range, Peers, BI, IoDevice);
 		{error, Reason} ->
 			{error, Reason}
 	end.
 
-export_blocks1({HeightStart, HeightEnd}, Peers, BHL, IoDevice) ->
+export_blocks1({HeightStart, HeightEnd}, Peers, BI, IoDevice) ->
 	S = #state{
-		bhl = BHL,
+		bi = BI,
 		peers = Peers
 	},
-	BHs = lists:sublist(lists:reverse(BHL), HeightStart + 1, HeightEnd - HeightStart + 1),
+	BHs = lists:sublist(lists:reverse(BI), HeightStart + 1, HeightEnd - HeightStart + 1),
 	Fun = fun(B) ->
 		io:format("Exporting block height: ~p~n", [B#block.height]),
 		Values = extract_block_values(S, full_block(B, Peers)),
@@ -54,30 +54,30 @@ export_transactions([Filename, HeightStart, HeightEnd]) ->
 
 export_transactions(Filename, {HeightStart, HeightEnd}) ->
 	case get_hash_list(HeightEnd) of
-		{ok, BHL} ->
+		{ok, BI} ->
 			Peers = ar_bridge:get_remote_peers(whereis(http_bridge_node)),
-			export_transactions(Filename, {HeightStart, HeightEnd}, BHL, take(Peers, 10));
+			export_transactions(Filename, {HeightStart, HeightEnd}, BI, take(Peers, 10));
 		Error ->
 			Error
 	end.
 
-export_transactions(Filename, Range, BHL, Peers) ->
+export_transactions(Filename, Range, BI, Peers) ->
 	Columns = ["Block Height", "Block Timestamp", "TX ID", "Submitted Address",
 				"Target", "Quantity (AR)", "Data Size (Bytes)", "Reward (AR)",
 				"App Name Tag", "Content Type Tag", "User Agent Tag", "Other Tags"],
 	case init_csv(Filename, Columns) of
 		{ok, IoDevice} ->
-			export_transactions1(Range, BHL, Peers, IoDevice);
+			export_transactions1(Range, BI, Peers, IoDevice);
 		{error, Reason} ->
 			{error, Reason}
 	end.
 
-export_transactions1({HeightStart, HeightEnd}, BHL, Peers, IoDevice) ->
+export_transactions1({HeightStart, HeightEnd}, BI, Peers, IoDevice) ->
 	S = #state{
-		bhl = BHL,
+		bi = BI,
 		peers = Peers
 	},
-	BHs = lists:sublist(lists:reverse(BHL), HeightStart + 1, HeightEnd - HeightStart + 1),
+	BHs = lists:sublist(lists:reverse(BI), HeightStart + 1, HeightEnd - HeightStart + 1),
 	WriteOneRow = fun(Values) ->
 		ok = file:write(IoDevice, csv_encode_row(Values))
 	end,
@@ -153,14 +153,14 @@ init_csv(Filename, Columns) ->
 blocks_foreach(_, _, []) ->
 	ok;
 blocks_foreach(Fun, S, [BH | BHs]) ->
-	{ok, B} = get_block(BH, S#state.bhl, S#state.peers),
+	{ok, B} = get_block(BH, S#state.bi, S#state.peers),
 	ok = Fun(B),
 	blocks_foreach(Fun, S, BHs).
 
-get_block(BH, BHL, Peers) ->
+get_block(BH, BI, Peers) ->
 	case ar_storage:read_block_shadow(BH) of
 		unavailable ->
-			fetch_and_store_block(BH, BHL, disorder(Peers));
+			fetch_and_store_block(BH, BI, disorder(Peers));
 		B ->
 			{ok, B}
 	end.
@@ -170,18 +170,18 @@ disorder(List) ->
 
 fetch_and_store_block(BH, _, []) ->
 	{error, {could_not_download_block, ar_util:encode(BH)}};
-fetch_and_store_block(BH, BHL, [Peer | Peers]) ->
+fetch_and_store_block(BH, BI, [Peer | Peers]) ->
 	io:format(
 		"Downloading block  ~p  from peer  ~p ... ",
 		[ar_util:encode(BH), ar_util:format_peer(Peer)]),
-	case ar_node_utils:get_full_block(Peer, BH, BHL) of
+	case ar_node_utils:get_full_block(Peer, BH, BI) of
 		B when ?IS_BLOCK(B) ->
 			io:format("success!~n"),
 			ar_storage:write_full_block(B),
 			{ok, B};
 		_ ->
 			io:format("failure!~n"),
-			fetch_and_store_block(BH, BHL, Peers)
+			fetch_and_store_block(BH, BI, Peers)
 	end.
 
 extract_block_values(S, B) ->
@@ -206,12 +206,12 @@ extract_block_values(S, B) ->
 reward_pool(_, #block{ height = 0 }) ->
 	{0, 0};
 reward_pool(S, B) ->
-	{ok, PreviousB} = get_block(B#block.previous_block, S#state.bhl, S#state.peers),
+	{ok, PreviousB} = get_block(B#block.previous_block, S#state.bi, S#state.peers),
 	reward_pool(S, B, PreviousB).
 
 reward_pool(S, B, PreviousB) ->
-	PreviousRecallBH = ar_util:get_recall_hash(PreviousB, S#state.bhl),
-	{ok, PreviousRecallB} = get_block(PreviousRecallBH, S#state.bhl, S#state.peers),
+	PreviousRecallBH = ar_util:get_recall_hash(PreviousB, S#state.bi),
+	{ok, PreviousRecallB} = get_block(PreviousRecallBH, S#state.bi, S#state.peers),
 	FullB = full_block(B, S#state.peers),
 	reward_pool1(FullB, PreviousB, PreviousRecallB).
 

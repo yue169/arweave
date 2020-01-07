@@ -66,10 +66,10 @@ remove_invalid_blocks(HashList) ->
 %% the size of the weave on disk (and on the wire).
 rewrite() ->
 	rewrite(lists:reverse(ar_node:get_hash_list(whereis(http_entrypoint_node)))).
-rewrite(BHL) -> rewrite(BHL, BHL).
-rewrite([], _BHL) -> [];
-rewrite([H|Rest], BHL) ->
-	try ar_storage:read_block(H, BHL) of
+rewrite(BI) -> rewrite(BI, BI).
+rewrite([], _BI) -> [];
+rewrite([{H,_}|Rest], BI) ->
+	try ar_storage:read_block(H, BI) of
 		B when ?IS_BLOCK(B) ->
 			ar_storage:write_block(B),
 			ar:report([{rewrote_block, ar_util:encode(H)}]);
@@ -78,7 +78,7 @@ rewrite([H|Rest], BHL) ->
 	catch _:_ ->
 		ar:report([{error_rewriting_block, ar_util:encode(H)}])
 	end,
-	rewrite(Rest, BHL).
+	rewrite(Rest, BI).
 
 %%%
 %%% Tests.
