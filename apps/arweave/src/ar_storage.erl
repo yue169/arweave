@@ -91,7 +91,10 @@ write_block(RawB) ->
 	WalletID = write_wallet_list(RawB#block.wallet_list),
 	B = RawB#block { wallet_list = WalletID },
 	BlockToWrite = ar_serialize:jsonify(ar_serialize:block_to_json_struct(B)),
+	% TODO: Remove after 2.0 is live.
+	HeaderHashB = B#block { indep_hash = B#block.header_hash },
 	file:write_file(Name = block_filepath(B), BlockToWrite),
+	file:write_file(Name = block_filepath(HeaderHashB), BlockToWrite),
 	ar_block_index:add(B, Name),
 	Name.
 -else.
@@ -108,7 +111,10 @@ write_block(RawB) ->
 	BlockToWrite = ar_serialize:jsonify(ar_serialize:block_to_json_struct(B)),
 	case enough_space(byte_size(BlockToWrite)) of
 		true ->
+			HeaderHashB = B#block { indep_hash = B#block.header_hash },
+			% TODO: Remove after 2.0 is live.
 			file:write_file(Name = block_filepath(B), BlockToWrite),
+			file:write_file(Name = block_filepath(HeaderHashB), BlockToWrite),
 			ar_block_index:add(B, Name),
 			spawn(
 				ar_meta_db,
