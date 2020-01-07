@@ -762,9 +762,15 @@ recovered_from_fork(#{id := BinID, block_index := not_joined} = StateIn, BI, Blo
 	),
 	ar_node_utils:log_invalid_txs_drop_reason(InvalidTXs),
 	ar_storage:write_block_block_index(BinID, BI),
+	lists:foreach(
+		fun({BH, _}) ->
+			ar_downloader:add_block(BH, BI, whereis(ar_downloader))
+		end,
+		BI
+	),
 	{ok, ar_node_utils:reset_miner(
 		StateIn#{
-			block_index            => BI,
+			block_index          => BI,
 			current              => NewB#block.indep_hash,
 			wallet_list          => NewB#block.wallet_list,
 			height               => NewB#block.height,

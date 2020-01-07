@@ -73,7 +73,7 @@ do_join(Node, RawPeers, NewB) ->
 			},
 			join_peers(Peers),
 			ar_miner_log:joined(),
-			spawn(fun() -> fill_to_capacity(ar_manage_peers:get_more_peers(Peers), NewB#block.block_index) end)
+			ar_downloader:start(ar_manage_peers:get_more_peers(Peers), NewB#block.block_index)
 	end.
 
 %% @doc Verify timestamps of peers.
@@ -261,46 +261,6 @@ get_block_and_trail(Peers, NewB, BehindCurrent, BI, BlockTXPairs) ->
 			),
 			timer:sleep(3000),
 			get_block_and_trail(Peers, NewB, BehindCurrent, BI, BlockTXPairs)
-	end.
-
-%% @doc Fills node to capacity based on weave storage limit.
-fill_to_capacity(Peers, BI) -> fill_to_capacity(Peers, BI, BI).
-fill_to_capacity(_, [], _) -> ok;
-fill_to_capacity(Peers, ToWrite, BI) ->
-	timer:sleep(1 * 1000),
-	{RandHash, _} = lists:nth(rand:uniform(length(ToWrite)), ToWrite),
-	case ar_storage:read_block(RandHash, BI) of
-		unavailable ->
-			fill_to_capacity2(Peers, RandHash, ToWrite, BI);
-		_ ->
-			fill_to_capacity(
-				Peers,
-				lists:delete(RandHash, ToWrite),
-				BI
-			)
-	end.
-
-fill_to_capacity2(Peers, RandHash, ToWrite, BI) ->
-	B =
-		try
-			ar_node_utils:get_full_block(Peers, RandHash, BI)
-		catch _:_ ->
-			unavailable
-		end,
-	case B of
-		unavailable ->
-			timer:sleep(3000),
-			fill_to_capacity(Peers, ToWrite, BI);
-		B ->
-			case ar_storage:write_full_block(B) of
-				{error, _} -> disk_full;
-				_ ->
-					fill_to_capacity(
-						Peers,
-						lists:delete(RandHash, ToWrite),
-						BI
-					)
-			end
 	end.
 
 %% @doc Check that nodes can join a running network by using the fork recoverer.

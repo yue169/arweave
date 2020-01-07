@@ -496,6 +496,7 @@ integrate_new_block(
 		PID ->
 			PID ! {parent_accepted_block, NewB}
 	end,
+	ar_downloader:add_block(NewB),
 	reset_miner(StateIn#{
 		block_index       => NewBI,
 		current         => NewB#block.indep_hash,
