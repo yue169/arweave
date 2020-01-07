@@ -5,6 +5,7 @@
 -export([calculate_min_tx_cost/4, calculate_min_tx_cost/6, check_last_tx/2]).
 -export([generate_data_tree/1, generate_chunk_id/1]).
 -export([verify_after_mining/1]).
+-export([generate_size_tagged_list_from_binary/1]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -382,6 +383,19 @@ chunk_binary(ChunkSize, Bin) when byte_size(Bin) < ChunkSize ->
 chunk_binary(ChunkSize, Bin) ->
 	<< ChunkBin:ChunkSize/binary, Rest/binary >> = Bin,
 	[ ChunkBin | chunk_binary(ChunkSize, Rest) ].
+
+generate_size_tagged_list_from_binary(Bin) ->
+	Chunks = chunk_binary(?DATA_CHUNK_SIZE, Bin),
+	lists:reverse(
+		lists:foldl(
+			fun(Chunk, {Pos, List}) ->
+				Start = Pos + byte_size(Chunk),
+				{Start, [{Chunk, Start}|List]}
+			end,
+			{0, []},
+			Chunks
+		)
+	).
 
 %%% Tests: ar_tx
 

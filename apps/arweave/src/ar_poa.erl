@@ -1,4 +1,5 @@
 -module(ar_poa).
+-export([generate/2]).
 -export([validate/4]).
 -export([validate_data_root/2, validate_data_tree/2, validate_chunk/3]).
 -include("ar.hrl").
@@ -7,26 +8,95 @@
 %%% This module implements all mechanisms required to validate a proof of access
 %%% for a chunk of data received from the network.
 
+%% @doc Generate a POA for the first option that we can.
+generate(WeaveSize, [{Seed, _}|_] = BI) ->
+	generate(
+		Seed,
+		WeaveSize,
+		BI,
+		1,
+		ar_meta_db:get(max_option_depth)
+	).
+
+generate(_, _, _, N, N) -> not_available;
+generate(Seed, WeaveSize, BI, Option, Limit) ->
+	ChallengeByte = calculate_challenge_byte(Seed, WeaveSize, Option),
+	ChallengeBlock = find_byte_in_size_tagged_list(ChallengeByte, BI),
+	case ar_storage:read_block_without_wl(ChallengeBlock) of
+		unavailable ->
+			generate(Seed, WeaveSize, BI, Option + 1, Limit);
+		B ->
+			TXID =
+				find_byte_in_size_tagged_list(
+					ChallengeByte - B#block.weave_size,
+					B#block.txs
+				),
+			case ar_storage:read_tx(TXID) of
+				unavailable ->
+					generate(Seed, WeaveSize, BI, Option + 1, Limit);
+				NoTreeTX ->
+					create_poa_from_data(B, NoTreeTX, ChallengeByte, Option)
+			end
+	end.
+
+create_poa_from_data(NoTreeB, NoTreeTX, ChallengeByte, Option) ->
+	B = ar_block:generate_tx_tree(NoTreeB),
+	TX = ar_tx:generate_data_tree(NoTreeTX),
+	Chunks = ar_tx:generate_size_tagged_list_from_binary(TX#tx.data),
+	{_TXID, TXStart} = lists:keyfind(TX#tx.id, 1, B#block.txs),
+	Chunk =
+		find_byte_in_size_tagged_list(
+			ChallengeByte - B#block.weave_size - TXStart,
+			Chunks
+		),
+	TXPath =
+		ar_merkle:generate_path(
+			B#block.tx_root,
+			ChallengeByte - B#block.weave_size,
+			B#block.tx_tree
+		),
+	DataPath =
+		ar_merkle:generate_path(
+			TX#tx.data_root,
+			ChallengeByte - B#block.weave_size - TXStart,
+			TX#tx.data_tree
+		),
+	#poa {
+		option = Option,
+		recall_block =
+			B#block {
+				txs = []
+			},
+		tx_path = TXPath,
+		tx =
+			TX#tx {
+				data = <<>>,
+				data_tree = []
+			},
+		data_path = DataPath,
+		chunk = Chunk
+	}.
+
 %% @doc Validate a complete proof of access object.
-validate(LastIndepHash, WeaveSize, BHL, POA) ->
-	ChallengeByte = calculate_challenge_byte(LastIndepHash, WeaveSize, POA#poa.option),
-	ChallengeBlock = calculate_challenge_block(ChallengeByte, BHL),
+validate(LastHeaderHash, WeaveSize, BHL, POA) ->
+	ChallengeByte = calculate_challenge_byte(LastHeaderHash, WeaveSize, POA#poa.option),
+	ChallengeBlock = find_byte_in_size_tagged_list(ChallengeByte, BHL),
 	case is_old_poa(ChallengeBlock, BHL) of
 		true -> validate_old_poa(BHL, POA);
 		false -> validate_recall_block(ChallengeByte, ChallengeBlock, POA)
 	end.
 
-calculate_challenge_byte(LastIndepHash, WeaveSize, Option) ->
-	binary:decode_unsigned(multihash(LastIndepHash, Option)) rem WeaveSize.
+calculate_challenge_byte(LastHeaderHash, WeaveSize, Option) ->
+	binary:decode_unsigned(multihash(LastHeaderHash, Option)) rem WeaveSize.
 
 multihash(X, Remaining) when Remaining =< 0 -> X;
 multihash(X, Remaining) ->
 	multihash(crypto:hash(?HASH_ALG, X), Remaining - 1).
 
-calculate_challenge_block(ChallengeByte, [{BH, WeaveSize}|_])
-		when WeaveSize > ChallengeByte -> BH;
-calculate_challenge_block(ChallengeByte, [_|BHL]) ->
-	calculate_challenge_block(ChallengeByte, BHL).
+find_byte_in_size_tagged_list(Byte, [{ID, Size}|_])
+		when Size > Byte -> ID;
+find_byte_in_size_tagged_list(Byte, [_|Rest]) ->
+	find_byte_in_size_tagged_list(Byte, Rest).
 
 calculate_block_height(BH, [{BH, _}|_BHL]) -> 0;
 calculate_block_height(BH, [_|BHL]) ->
@@ -105,7 +175,7 @@ validate_chunking_test() ->
 	% Generate our TX data, wallet, and signed and indexed transactions.
 	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 5.5)),
 	ChallengeLocation = (?DATA_CHUNK_SIZE * 3) + 10, % Pick a byte in the third chunk
-		Chunk =
+	Chunk =
 		binary:part(
 			TXData,
 			trunc(?DATA_CHUNK_SIZE*3),

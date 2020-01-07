@@ -101,12 +101,21 @@ find_recall_block(HashList) ->
 find_block(Hash) when is_binary(Hash) ->
 	ar_storage:read_block(Hash).
 
-calculate_reward_pool(OldPool, TXs, RewardAddr, RecallSize, WeaveSize, Height, Diff, Timestamp) ->
+calculate_reward_pool(
+		OldPool,
+		TXs,
+		RewardAddr,
+		POA,
+		WeaveSize,
+		Height,
+		Diff,
+		Timestamp) ->
 	case ar_fork:height_1_8() of
 		H when Height >= H ->
-			calculate_reward_pool_perpetual(OldPool, TXs, RewardAddr, RecallSize, WeaveSize, Height, Diff, Timestamp);
+			calculate_reward_pool_perpetual(
+				OldPool, TXs, RewardAddr, POA, WeaveSize, Height, Diff, Timestamp);
 		_ ->
-			Proportion = calculate_proportion(RecallSize, WeaveSize, Height),
+			Proportion = calculate_proportion(POA#block.block_size, WeaveSize, Height),
 			calculate_reward_pool_original(OldPool, TXs, RewardAddr, Proportion)
 	end.
 
@@ -114,7 +123,7 @@ calculate_reward_pool(OldPool, TXs, RewardAddr, RecallSize, WeaveSize, Height, D
 calculate_reward_pool_perpetual(OldPool, TXs, unclaimed, _, _, _, _, _) ->
 	NewPool = OldPool + lists:sum([TX#tx.reward || TX <- TXs]),
 	{0, NewPool};
-calculate_reward_pool_perpetual(OldPool, TXs, _, RecallSize, WeaveSize, Height, Diff, Timestamp) ->
+calculate_reward_pool_perpetual(OldPool, TXs, _, POA, WeaveSize, Height, Diff, Timestamp) ->
 	Inflation = erlang:trunc(ar_inflation:calculate(Height)),
 	{TXsCost, TXsReward} = lists:foldl(
 		fun(TX, {TXCostAcc, TXRewardAcc}) ->
@@ -143,13 +152,31 @@ calculate_reward_pool_perpetual(OldPool, TXs, _, RecallSize, WeaveSize, Height, 
 	Burden = erlang:trunc(WeaveSize * CostPerGBPerBlock / (1024 * 1024 * 1024)),
 	AR = Burden - BaseReward,
 	NewPool = OldPool + TXsCost,
-	case AR =< 0 of
-		true  -> % BaseReward >= Burden
-			{BaseReward, NewPool};
-		false -> % Burden > BaseReward
-			X = erlang:trunc(AR * max(1, RecallSize) * Height / WeaveSize),
-			Take = min(NewPool, X),
-			{BaseReward + Take, NewPool - Take}
+	case Height >= ?FORK_2_0 of
+		true ->
+			RewardMultiplier = 1/POA#poa.option,
+			PoolMultiplier = (1 - RewardMultiplier),
+			case AR =< 0 of
+				true ->
+					{
+						erlang:trunc(BaseReward * RewardMultiplier),
+						NewPool + erlang:trunc(BaseReward * PoolMultiplier)
+					};
+				false ->
+					{
+						erlang:trunc((BaseReward + AR) * RewardMultiplier),
+						(NewPool - AR) + erlang:trunc(BaseReward * PoolMultiplier)
+					}
+			end;
+		false ->
+			case AR =< 0 of
+				true  -> % BaseReward >= Burden
+					{BaseReward, NewPool};
+				false -> % Burden > BaseReward
+					X = erlang:trunc(AR * max(1, POA#block.block_size) * Height / WeaveSize),
+					Take = min(NewPool, X),
+					{BaseReward + Take, NewPool - Take}
+			end
 	end.
 
 %% @doc Calculate the reward.
@@ -266,11 +293,62 @@ start_mining(#{hash_list := not_joined} = StateIn, _) ->
 	StateIn;
 start_mining(#{
 		node := Node,
+		hash_list := BI,
+		weave_size := WeaveSize,
+		txs := TXs,
+		reward_addr := RewardAddr,
+		tags := Tags,
+		block_txs_pairs := BlockTXPairs } = StateIn, ForceDiff)
+		when length(BI) >= ?FORK_2_0 ->
+	case ar_poa:generate(WeaveSize, BI) of
+		not_available ->
+			ar:info(
+				[
+					not_mining_this_block,
+					{reason, data_unavailable_to_generate_poa},
+					{generated_options_to_depth, ar_meta_db:get(max_option_depth)}
+				]
+			);
+		POA ->
+			ar_miner_log:started_hashing(),
+			ar:info([{node_starting_to_mine, Node}]),
+			B = ar_storage:read_block(hd(element(1, hd(BI))), BI),
+			case ForceDiff of
+				unforced ->
+					Miner = ar_mine:start(
+						B,
+						POA,
+						TXs,
+						RewardAddr,
+						Tags,
+						Node,
+						BlockTXPairs
+					),
+					ar:info([{node, Node}, {started_miner, Miner}]),
+					StateIn#{ miner => Miner };
+				ForceDiff ->
+					Miner = ar_mine:start(
+						B,
+						POA,
+						TXs,
+						RewardAddr,
+						Tags,
+						ForceDiff,
+						Node,
+						BlockTXPairs
+					),
+					ar:info([{node, Node}, {started_miner, Miner}, {forced_diff, ForceDiff}]),
+					StateIn#{ miner => Miner, diff => ForceDiff }
+			end
+	end;
+start_mining(#{
+		node := Node,
 		hash_list := BHL,
 		txs := TXs,
 		reward_addr := RewardAddr,
 		tags := Tags,
 		block_txs_pairs := BlockTXPairs } = StateIn, ForceDiff) ->
+	% TODO REMOVE after 2.0
 	case find_recall_block(BHL) of
 		unavailable ->
 			B = ar_storage:read_block(hd(BHL), BHL),
@@ -417,30 +495,6 @@ integrate_new_block(
 		undefined -> do_nothing;
 		PID ->
 			PID ! {parent_accepted_block, NewB}
-	end,
-	RecallHash = ar_util:get_recall_hash(NewB, BHL = NewBHL),
-	RawRecallB = ar_storage:read_block(RecallHash, BHL),
-	case ?IS_BLOCK(RawRecallB) of
-		true ->
-			case make_full_block(RawRecallB) of
-				{ok, RecallB} ->
-					ar_key_db:put(
-						RecallB#block.indep_hash,
-						[
-							{
-								ar_block:generate_block_key(
-									RecallB,
-									NewB#block.previous_block
-								),
-								binary:part(NewB#block.indep_hash, 0, 16)
-							}
-						]
-					);
-				{error, _} ->
-					ok
-			end;
-		false ->
-			ok
 	end,
 	reset_miner(StateIn#{
 		hash_list       => NewBHL,

@@ -14,6 +14,7 @@
 -export([reconstruct_hash_list_from_shadow/2, generate_block_data_segment/6]).
 -export([generate_hash_list_for_block/2]).
 -export([generate_block_data_segment_and_pieces/6, refresh_block_data_segment_timestamp/6]).
+-export([generate_data_tree/1]).
 
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -27,6 +28,28 @@ hash_wallet_list(WalletList) ->
 			{Addr, Balance, LastTX} <- WalletList
 		>>,
 	crypto:hash(?HASH_ALG, Bin).
+
+%% @doc Generate the TX tree and set the TX root for a block.
+generate_data_tree(B) ->
+	TXs = generate_size_tagged_list_from_txs(B#block.txs),
+	{Root, Tree} = ar_merkle:generate_tree(TXs),
+	B#block { tx_tree = Tree, tx_root = Root }.
+
+generate_size_tagged_list_from_txs(TXs) ->
+	lists:reverse(
+		lists:foldl(
+			fun({TXID, Size}, {Pos, List}) ->
+				Start = Pos + Size,
+				{Start, [{TXID, Start}|List]};
+			   (TX, {Pos, List}) ->
+				Start = Pos + TX#tx.data_size,
+				{Start, [{TX#tx.id, Start}|List]}
+			end,
+			{0, []},
+			TXs
+		)
+	).
+	
 
 %% @doc Find the appropriate block hash list for a block/indep. hash, from a
 %% block hash list further down the weave.
@@ -273,29 +296,29 @@ block_field_size_limit(B) ->
 
 %% @docs Generate a hashable data segment for a block from the preceding block,
 %% the preceding block's recall block, TXs to be mined, reward address and tags.
-generate_block_data_segment(PrecedingB, PrecedingRecallB, [unavailable], RewardAddr, Time, Tags) ->
+generate_block_data_segment(PrecedingB, POA, [unavailable], RewardAddr, Time, Tags) ->
 	generate_block_data_segment(
 		PrecedingB,
-		PrecedingRecallB,
+		POA,
 		[],
 		RewardAddr,
 		Time,
 		Tags
 	);
-generate_block_data_segment(PrecedingB, PrecedingRecallB, TXs, unclaimed, Time, Tags) ->
+generate_block_data_segment(PrecedingB, POA, TXs, unclaimed, Time, Tags) ->
 	generate_block_data_segment(
 		PrecedingB,
-		PrecedingRecallB,
+		POA,
 		TXs,
 		<<>>,
 		Time,
 		Tags
 	);
-generate_block_data_segment(PrecedingB, PrecedingRecallB, TXs, RewardAddr, Time, Tags) ->
-	{_, BDS} = generate_block_data_segment_and_pieces(PrecedingB, PrecedingRecallB, TXs, RewardAddr, Time, Tags),
+generate_block_data_segment(PrecedingB, POA, TXs, RewardAddr, Time, Tags) ->
+	{_, BDS} = generate_block_data_segment_and_pieces(PrecedingB, POA, TXs, RewardAddr, Time, Tags),
 	BDS.
 
-generate_block_data_segment_and_pieces(PrecedingB, PrecedingRecallB, TXs, RewardAddr, Time, Tags) ->
+generate_block_data_segment_and_pieces(PrecedingB, POA, TXs, RewardAddr, Time, Tags) ->
 	NewHeight = PrecedingB#block.height + 1,
 	Retarget =
 		case ar_retarget:is_retarget_height(NewHeight) of
@@ -321,7 +344,7 @@ generate_block_data_segment_and_pieces(PrecedingB, PrecedingRecallB, TXs, Reward
 			PrecedingB#block.reward_pool,
 			TXs,
 			RewardAddr,
-			PrecedingRecallB#block.block_size,
+			POA,
 			WeaveSize,
 			PrecedingB#block.height + 1,
 			NewDiff,
@@ -378,18 +401,30 @@ generate_block_data_segment_and_pieces(PrecedingB, PrecedingRecallB, TXs, Reward
 		<<
 			(integer_to_binary(RewardPool))/binary
 		>>,
-		<<
-			(block_to_binary(PrecedingRecallB))/binary,
-			(
-				binary:list_to_bin(
-					lists:map(
-						fun ar_tx:tx_to_binary/1,
-						TXs
-					)
-				)
-			)/binary,
-			MR/binary
-		>>
+		case NewHeight >= ?FORK_2_0 of
+			true ->
+				<<
+					(integer_to_binary(POA#poa.option))/binary,
+					(block_to_binary(POA#poa.recall_block))/binary,
+					(POA#poa.tx_path)/binary,
+					(ar_tx:tx_to_binary(POA#poa.tx))/binary,
+					(POA#poa.data_path)/binary,
+					(POA#poa.chunk)/binary
+				>>;
+			false ->
+				<<
+					(block_to_binary(POA))/binary,
+					(
+						binary:list_to_bin(
+							lists:map(
+								fun ar_tx:tx_to_binary/1,
+								TXs
+							)
+						)
+					)/binary,
+					MR/binary
+				>>
+		end
 	],
 	{Pieces, crypto:hash(
 		?MINING_HASH_ALG,

@@ -13,7 +13,7 @@
 	parent, % miners parent process (initiator)
 	current_block, % current block held by node
 	block_txs_pairs, % list of {BH, TXIDs} pairs for latest ?MAX_TX_ANCHOR_DEPTH blocks
-	recall_block, % recall block related to current
+	poa, % recall block related to current
 	txs, % the set of txs to be mined
 	timestamp, % the block timestamp used for the mining
 	timestamp_refresh_timer, % Reference for timer for updating the timestamp
@@ -32,15 +32,15 @@
 }).
 
 %% @doc Spawns a new mining process and returns its PID.
-start(CurrentB, RecallB, RawTXs, RewardAddr, Tags, Parent, BlockTXPairs) ->
-	do_start(CurrentB, RecallB, RawTXs, RewardAddr, Tags, auto_update, Parent, BlockTXPairs).
+start(CurrentB, POA, RawTXs, RewardAddr, Tags, Parent, BlockTXPairs) ->
+	do_start(CurrentB, POA, RawTXs, RewardAddr, Tags, auto_update, Parent, BlockTXPairs).
 
-start(CurrentB, RecallB, RawTXs, RewardAddr, Tags, StaticDiff, Parent, BlockTXPairs) when is_integer(StaticDiff) ->
-	do_start(CurrentB, RecallB, RawTXs, RewardAddr, Tags, StaticDiff, Parent, BlockTXPairs).
+start(CurrentB, POA, RawTXs, RewardAddr, Tags, StaticDiff, Parent, BlockTXPairs) when is_integer(StaticDiff) ->
+	do_start(CurrentB, POA, RawTXs, RewardAddr, Tags, StaticDiff, Parent, BlockTXPairs).
 
-do_start(CurrentB, RecallB, RawTXs, unclaimed, Tags, Diff, Parent, BlockTXPairs) ->
-	do_start(CurrentB, RecallB, RawTXs, <<>>, Tags, Diff, Parent, BlockTXPairs);
-do_start(CurrentB, RecallB, RawTXs, RewardAddr, Tags, Diff, Parent, BlockTXPairs) ->
+do_start(CurrentB, POA, RawTXs, unclaimed, Tags, Diff, Parent, BlockTXPairs) ->
+	do_start(CurrentB, POA, RawTXs, <<>>, Tags, Diff, Parent, BlockTXPairs);
+do_start(CurrentB, POA, RawTXs, RewardAddr, Tags, Diff, Parent, BlockTXPairs) ->
 	{NewDiff, AutoUpdateDiff} = case Diff of
 		auto_update -> {not_set, true};
 		_ -> {Diff, false}
@@ -49,7 +49,7 @@ do_start(CurrentB, RecallB, RawTXs, RewardAddr, Tags, Diff, Parent, BlockTXPairs
 		#state {
 			parent = Parent,
 			current_block = CurrentB,
-			recall_block = RecallB,
+			poa = POA,
 			data_segment_duration = 0,
 			reward_addr = RewardAddr,
 			tags = Tags,
@@ -199,7 +199,7 @@ update_data_segment(S, TXs, BlockTimestamp, Diff) ->
 			timer:tc(fun() ->
 				ar_block:generate_block_data_segment_and_pieces(
 					S#state.current_block,
-					S#state.recall_block,
+					S#state.poa,
 					TXs,
 					S#state.reward_addr,
 					BlockTimestamp,
@@ -211,7 +211,7 @@ update_data_segment(S, TXs, BlockTimestamp, Diff) ->
 				ar_block:refresh_block_data_segment_timestamp(
 					BDSPieces,
 					S#state.current_block,
-					S#state.recall_block,
+					S#state.poa,
 					TXs,
 					S#state.reward_addr,
 					BlockTimestamp

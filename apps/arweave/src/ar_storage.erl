@@ -335,9 +335,9 @@ write_tx(TX) ->
 
 %% @doc Read a tx from disk, given a hash.
 read_tx(unavailable) -> unavailable;
-read_tx(Tx) when is_record(Tx, tx) -> Tx;
-read_tx(Txs) when is_list(Txs) ->
-	lists:map(fun read_tx/1, Txs);
+read_tx(TX) when is_record(TX, tx) -> TX;
+read_tx(TXs) when is_list(Txs) ->
+	lists:map(fun read_tx/1, TXs);
 read_tx(ID) ->
 	case filelib:wildcard(tx_filepath(ID)) of
 		[] -> unavailable;

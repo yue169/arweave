@@ -55,6 +55,7 @@ block_to_json_struct(
 		header_hash = HeaderHash,
 		txs = TXs,
 		tx_root = TXRoot,
+		tx_tree = TXTree,
 		wallet_list = WalletList,
 		reward_addr = RewardAddr,
 		tags = Tags,
@@ -93,6 +94,7 @@ block_to_json_struct(
 				)
 			},
 			{tx_root, ar_util:encode(TXRoot)},
+			{tx_tree, tree_to_json_struct(TXTree)},
 			{wallet_list,
 				case is_binary(WalletList) of
 					true -> ar_util:encode(WalletList);
@@ -249,6 +251,11 @@ json_struct_to_block({BlockStruct}) ->
 			case find_value(<<"poa">>, BlockStruct) of
 				undefined -> undefined;
 				POAStruct -> json_struct_to_poa(POAStruct)
+			end,
+		tx_tree =
+			case find_value(<<"tx_tree">>, BlockStruct) of
+				undefined -> [];
+				POAStruct -> json_struct_to_tree(POAStruct)
 			end
 	}.
 

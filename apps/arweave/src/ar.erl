@@ -239,6 +239,8 @@ parse_cli_args(["max_connections", Num | Rest], C) ->
 	parse_cli_args(Rest, C#config { max_connections = list_to_integer(Num) });
 parse_cli_args(["max_gateway_connections", Num | Rest], C) ->
 	parse_cli_args(Rest, C#config { max_gateway_connections = list_to_integer(Num) });
+parse_cli_args(["max_option_depth", Num | Rest], C) ->
+	parse_cli_args(Rest, C#config { max_option_depth = list_to_integer(Num) });
 parse_cli_args([Arg|_Rest], _O) ->
 	io:format("~nUnknown argument: ~s.~n", [Arg]),
 	show_help().
@@ -289,7 +291,8 @@ start(
 		ipfs_pin = IPFSPin,
 		webhooks = WebhookConfigs,
 		max_connections = MaxConnections,
-		max_gateway_connections = MaxGatewayConnections
+		max_gateway_connections = MaxGatewayConnections,
+		max_option_depth = MaxOptionDepth
 	}) ->
 	%% Start the logging system.
 	filelib:ensure_dir(?LOG_DIR ++ "/"),
@@ -318,6 +321,7 @@ start(
 	ar_meta_db:put(internal_api_secret, InternalApiSecret),
 	ar_meta_db:put(requests_per_minute_limit, RequestsPerMinuteLimit),
 	ar_meta_db:put(max_propagation_peers, MaxPropagationPeers),
+	ar_meta_db:put(max_option_depth, MaxOptionDepth),
 	%% Prepare the storage for operation.
 	ar_storage:start(),
 	%% Optionally clear the block cache.

@@ -284,6 +284,7 @@
 	header_hash = <<>>, % Hash of this block (for use in post-v2)
 	txs = [], % A list of tx records in full blocks, or a list of tx ids in block shadows.
 	tx_root = <<>>, % Merkle root of the tree of ordered TXs.
+	tx_tree = [], % The tree data structure of TXs. Not stored.
 	hash_list = unset, % A list of all previous indep hashes.
 	hash_list_merkle = <<>>, % The merkle root of the block's BHL.
 	wallet_list = [], % A map of wallet balances, the wallet list hash, or undefined.
