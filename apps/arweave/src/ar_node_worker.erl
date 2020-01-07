@@ -369,10 +369,10 @@ process_new_block(#{ block_index := not_joined }, BShadow, _Recall, _Peer) ->
 	none;
 process_new_block(#{ height := Height } = StateIn, BShadow, Recall, Peer)
 		when BShadow#block.height == Height + 1 ->
-	#{ block_index := HashList, wallet_list := WalletList, block_txs_pairs := BlockTXPairs } = StateIn,
+	#{ block_index := BI, wallet_list := WalletList, block_txs_pairs := BlockTXPairs } = StateIn,
 	case generate_block_from_shadow(StateIn, BShadow, Recall, Peer) of
 		{ok, {NewB, RecallB}} ->
-			B = ar_util:get_head_block(HashList),
+			B = ar_util:get_head_block(BI),
 			StateNew = StateIn#{ wallet_list => NewB#block.wallet_list },
 			TXs = NewB#block.txs,
 			case ar_node_utils:validate(StateNew, NewB, TXs, B, RecallB) of
@@ -422,12 +422,12 @@ process_new_block(#{ height := Height }, BShadow, _Recall, _Peer)
 	none;
 process_new_block(#{ height := Height } = StateIn, BShadow, _Recall, Peer)
 		when (BShadow#block.height > Height + 1) ->
-	#{ block_index := HashList, cumulative_diff := CDiff } = StateIn,
-	case is_fork_preferable(BShadow, CDiff, HashList) of
+	#{ block_index := BI, cumulative_diff := CDiff } = StateIn,
+	case is_fork_preferable(BShadow, CDiff, BI) of
 		true ->
-			case ar_block:reconstruct_block_index_from_shadow(BShadow#block.block_index, HashList) of
-				{ok, NewHashList} ->
-					{ok, ar_node_utils:fork_recover(StateIn, Peer, BShadow#block { block_index = NewHashList })};
+			case ar_block:reconstruct_block_index_from_shadow(BShadow#block.block_index, BI) of
+				{ok, NewBI} ->
+					{ok, ar_node_utils:fork_recover(StateIn, Peer, BShadow#block { block_index = NewBI })};
 				{error, _} ->
 					none
 			end;
@@ -451,30 +451,30 @@ generate_block_from_shadow(StateIn, BShadow, Recall, Peer) ->
 	end.
 
 generate_block_from_shadow(StateIn, BShadow, Recall, TXs, Peer) ->
-	#{ block_index := HashList } = StateIn,
-	case ar_block:reconstruct_block_index_from_shadow(BShadow#block.block_index, HashList) of
-		{ok, NewHashList} ->
-			generate_block_from_shadow(StateIn, BShadow, Recall, TXs, NewHashList, Peer);
+	#{ block_index := BI } = StateIn,
+	case ar_block:reconstruct_block_index_from_shadow(BShadow#block.block_index, BI) of
+		{ok, NewBI} ->
+			generate_block_from_shadow(StateIn, BShadow, Recall, TXs, NewBI, Peer);
 		{error, _} ->
 			error
 	end.
 
-generate_block_from_shadow(StateIn, BShadow, Recall, TXs, NewHashList, Peer) ->
-	#{ block_index := HashList } = StateIn,
+generate_block_from_shadow(StateIn, BShadow, Recall, TXs, NewBI, Peer) ->
+	#{ block_index := BI } = StateIn,
 	{RecallIndepHash, Key, Nonce} = case Recall of
 		no_recall ->
 			{
-				ar_util:get_recall_hash(BShadow#block.previous_block, BShadow#block.height - 1, NewHashList),
+				ar_util:get_recall_hash(BShadow#block.previous_block, BShadow#block.height - 1, NewBI),
 				<<>>,
 				<<>>
 			};
 		{RecallH, _, K, N} ->
 			{RecallH, K, N}
 	end,
-	MaybeRecallB = case ar_block:get_recall_block(Peer, RecallIndepHash, NewHashList, Key, Nonce) of
+	MaybeRecallB = case ar_block:get_recall_block(Peer, RecallIndepHash, NewBI, Key, Nonce) of
 		unavailable ->
-			RecallHash = ar_util:get_recall_hash(BShadow, HashList),
-			FetchedRecallB = ar_node_utils:get_full_block(Peer, RecallHash, HashList),
+			RecallHash = ar_util:get_recall_hash(BShadow, BI),
+			FetchedRecallB = ar_node_utils:get_full_block(Peer, RecallHash, BI),
 			case ?IS_BLOCK(FetchedRecallB) of
 				true ->
 					ar_storage:write_full_block(FetchedRecallB),
@@ -491,7 +491,7 @@ generate_block_from_shadow(StateIn, BShadow, Recall, TXs, NewHashList, Peer) ->
 			error;
 		RecallB ->
 			NewWalletList = generate_wallet_list_from_shadow(StateIn, BShadow, RecallB, TXs),
-			{ok, {BShadow#block{ block_index = NewHashList, wallet_list = NewWalletList, txs = TXs}, RecallB}}
+			{ok, {BShadow#block{ block_index = NewBI, wallet_list = NewWalletList, txs = TXs}, RecallB}}
 	end.
 
 pick_txs(TXIDs, TXs) ->
@@ -576,7 +576,7 @@ integrate_block_from_miner(#{ block_index := not_joined }, _MinedTXs, _Diff, _No
 integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 	#{
 		id              := BinID,
-		block_index       := HashList,
+		block_index     := BI,
 		wallet_list     := RawWalletList,
 		txs             := TXs,
 		gossip          := GS,
@@ -588,7 +588,7 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 		block_txs_pairs := BlockTXPairs
 	} = StateIn,
 	% Calculate the new wallet list (applying TXs and mining rewards).
-	RecallB = ar_node_utils:find_recall_block(HashList),
+	RecallB = ar_node_utils:find_recall_block(BI),
 	WeaveSize = OldWeaveSize +
 		lists:foldl(
 			fun(TX, Acc) ->
@@ -604,7 +604,7 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 			RewardAddr,
 			RecallB#block.block_size,
 			WeaveSize,
-			length(HashList),
+			length(BI),
 			Diff,
 			Timestamp
 		),
@@ -618,7 +618,7 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 			{txs, length(MinedTXs)},
 			{recall_block_size, RecallB#block.block_size},
 			{weave_size, WeaveSize},
-			{length, length(HashList)}
+			{length, length(BI)}
 		]
 	),
 	WalletList =
@@ -626,20 +626,20 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 			ar_node_utils:apply_txs(RawWalletList, MinedTXs, Height),
 			RewardAddr,
 			FinderReward,
-			length(HashList)
+			length(BI)
 		),
 	StateNew = StateIn#{ wallet_list => WalletList },
 	%% Build the block record, verify it, and gossip it to the other nodes.
 	[NextB | _] = ar_weave:add(
-		HashList, MinedTXs, HashList, RewardAddr, RewardPool,
+		BI, MinedTXs, BI, RewardAddr, RewardPool,
 		WalletList, Tags, RecallB, Diff, Nonce, Timestamp),
-	B = ar_util:get_head_block(HashList),
+	B = ar_util:get_head_block(BI),
 	BlockValid = ar_node_utils:validate(
 		StateNew,
 		NextB,
 		MinedTXs,
 		B,
-		RecallB = ar_node_utils:find_recall_block(HashList)
+		RecallB = ar_node_utils:find_recall_block(BI)
 	),
 	case BlockValid of
 		{invalid, _} ->
@@ -658,7 +658,7 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 					reject_block_from_miner(StateIn, tx_replay);
 				valid ->
 					ar_storage:write_full_block(NextB, MinedTXs),
-					NewHL = [NextB#block.indep_hash | HashList],
+					NewBI = [{NextB#block.indep_hash, NextB#block.weave_size} | BI],
 					NewBlockTXPairs = ar_node_utils:update_block_txs_pairs(
 						NextB#block.indep_hash,
 						[TX#tx.id || TX <- MinedTXs],
@@ -673,8 +673,8 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 							NextB#block.wallet_list
 						),
 					ar_node_utils:log_invalid_txs_drop_reason(InvalidTXs),
-					NewHL = [NextB#block.indep_hash | HashList],
-					ar_storage:write_block_block_index(BinID, NewHL),
+					NewBI = [{NextB#block.indep_hash, NextB#block.weave_size} | BI],
+					ar_storage:write_block_block_index(BinID, NewBI),
 					ar_miner_log:mined_block(NextB#block.indep_hash),
 					ar:report_console(
 						[
@@ -704,8 +704,8 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 						),
 					{ok, ar_node_utils:reset_miner(
 						StateNew#{
-							block_index            => NewHL,
-							current              => hd(NewHL),
+							block_index          => NewBI,
+							current              => element(1, hd(NewBI)),
 							gossip               => NewGS,
 							txs                  => ValidTXs,
 							height               => NextB#block.height,
@@ -776,13 +776,13 @@ recovered_from_fork(#{id := BinID, block_index := not_joined} = StateIn, BI, Blo
 			block_txs_pairs      => BlockTXPairs
 		}
 	)};
-recovered_from_fork(#{ block_index := HashList } = StateIn, BI, BlockTXPairs) ->
+recovered_from_fork(#{ block_index := BBI } = StateIn, BI, BlockTXPairs) ->
 	case whereis(fork_recovery_server) of
 		undefined -> ok;
 		_		  -> erlang:unregister(fork_recovery_server)
 	end,
 	NewB = ar_storage:read_block(element(1, hd(BI)), BI),
-	case is_fork_preferable(NewB, maps:get(cumulative_diff, StateIn), HashList) of
+	case is_fork_preferable(NewB, maps:get(cumulative_diff, StateIn), BBI) of
 		true ->
 			do_recovered_from_fork(StateIn, NewB, BlockTXPairs);
 		false ->

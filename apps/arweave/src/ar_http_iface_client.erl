@@ -62,7 +62,7 @@ has_tx(Peer, ID) ->
 
 %% @doc Distribute a newly found block to remote nodes.
 send_new_block(Peer, NewB, BDS, {RecallIndepHash, RecallSize, Key, Nonce}) ->
-	ShortHashList =
+	ShortBI =
 		lists:map(
 			fun ar_util:encode/1,
 			lists:sublist(
@@ -75,7 +75,7 @@ send_new_block(Peer, NewB, BDS, {RecallIndepHash, RecallSize, Key, Nonce}) ->
 		ar_serialize:block_to_json_struct(
 			NewB#block { wallet_list = [] }
 		),
-	BlockShadowProps = [{<<"block_index">>, ShortHashList} | SmallBlockProps],
+	BlockShadowProps = [{<<"block_index">>, ShortBI} | SmallBlockProps],
 	PostProps = [
 		{<<"new_block">>, {BlockShadowProps}},
 		{<<"recall_block">>, ar_util:encode(RecallIndepHash)},
@@ -552,18 +552,18 @@ reconstruct_full_block(Peer, Peers, Body, BI) ->
 								get_wallet_list(Peer, B#block.indep_hash)
 						end
 				end,
-			HashList =
+			BI =
 				case B#block.block_index of
 					unset ->
 						ar_block:generate_block_index_for_block(B, BI);
-					HL -> HL
+					BI -> BI
 				end,
 			MempoolTXs = ar_node:get_pending_txs(whereis(http_entrypoint_node)),
 			case {get_txs(Peers, MempoolTXs, B), WalletList} of
 				{{ok, TXs}, MaybeWalletList} when is_list(MaybeWalletList) ->
 					B#block {
 						txs = TXs,
-						block_index = HashList,
+						block_index = BI,
 						wallet_list = WalletList
 					};
 				_ ->

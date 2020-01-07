@@ -72,18 +72,18 @@ get_hash(B) when is_record(B, block) ->
 
 %% @doc Get block height from a hash list.
 height_from_hashes(not_joined) -> -1;
-height_from_hashes(BHL) ->
-	(get_head_block(BHL))#block.height.
+height_from_hashes(BI) ->
+	(get_head_block(BI))#block.height.
 
 %% @doc Get a wallet list from a hash list.
 wallets_from_hashes(not_joined) -> [];
-wallets_from_hashes(HashList) ->
-	(get_head_block(HashList))#block.wallet_list.
+wallets_from_hashes(BI) ->
+	(get_head_block(BI))#block.wallet_list.
 
 %% @doc Get block list from hash list.
 blocks_from_hashes([]) -> undefined;
-blocks_from_hashes(BHL) ->
-	lists:map(fun(BH) -> ar_storage:read_block(BH, BHL) end, BHL).
+blocks_from_hashes(BI) ->
+	lists:map(fun({BH, _}) -> ar_storage:read_block(BH, BI) end, BI).
 
 %% @doc Fetch a block hash by number from a block hash list (and disk).
 hash_from_block_index(Num, BI) ->
@@ -93,28 +93,28 @@ hash_from_block_index(Num, BI) ->
 block_from_block_index(Num, BI) ->
 	ar_storage:read_block(hash_from_block_index(Num, BI), BI).
 
-%% @doc Fetch the head block using BHL.
+%% @doc Fetch the head block using BI.
 get_head_block(not_joined) -> unavailable;
-get_head_block(BHL = [IndepHash|_]) ->
-	ar_storage:read_block(IndepHash, BHL).
+get_head_block(BI = [{IndepHash, _}|_]) ->
+	ar_storage:read_block(IndepHash, BI).
 
 %% @doc Get the hash of the recall block for the current block
 %% and its hash list.
-get_recall_hash(B, HL) when ?IS_BLOCK(B) ->
-	get_recall_hash(B#block.indep_hash, B#block.height, HL).
+get_recall_hash(B, BI) when ?IS_BLOCK(B) ->
+	get_recall_hash(B#block.indep_hash, B#block.height, BI).
 
 %% @doc Get the hash of the recall block for the current block's
 %% hash, height, hash list.
 get_recall_hash(H, _Height, []) ->
 	H;
-get_recall_hash(H, Height, HL) ->
+get_recall_hash(H, Height, BI) ->
 	RecallIndex = case Height of
 		0 ->
 			1;
 		RecallHeight ->
 			1 + binary:decode_unsigned(H) rem RecallHeight
 	end,
-	lists:nth(RecallIndex, lists:reverse(HL)).
+	element(1, lists:nth(RecallIndex, lists:reverse(BI))).
 
 %% @doc Replace a term in a list with another term.
 replace(_, _, []) -> [];

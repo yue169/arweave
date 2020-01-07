@@ -66,13 +66,13 @@ add(Bs) ->
 	add(Bs, []).
 add(Bs, TXs) ->
 	add(Bs, TXs, generate_block_index(Bs)).
-add(Bs, TXs, HashList) ->
-	add(Bs, TXs, HashList, <<>>).
-add(Bs, TXs, HashList, unclaimed) ->
-	add(Bs, TXs, HashList, <<>>);
-add([B|Bs], TXs, HashList, RewardAddr) ->
-	RecallHash = ar_util:get_recall_hash(B, HashList),
-	RecallB = ar_storage:read_block(RecallHash, HashList),
+add(Bs, TXs, BI) ->
+	add(Bs, TXs, BI, <<>>).
+add(Bs, TXs, BI, unclaimed) ->
+	add(Bs, TXs, BI, <<>>);
+add([B|Bs], TXs, BI, RewardAddr) ->
+	RecallHash = ar_util:get_recall_hash(B, BI),
+	RecallB = ar_storage:read_block(RecallHash, BI),
 	{FinderReward, RewardPool} =
 		ar_node_utils:calculate_reward_pool(
 			B#block.reward_pool,
@@ -85,32 +85,32 @@ add([B|Bs], TXs, HashList, RewardAddr) ->
 			B#block.timestamp
 		),
 	WalletList = ar_node_utils:apply_mining_reward(
-		ar_node_utils:apply_txs(B#block.wallet_list, TXs, length(HashList) - 1),
+		ar_node_utils:apply_txs(B#block.wallet_list, TXs, length(BI) - 1),
 		RewardAddr,
 		FinderReward,
-		length(HashList)
+		length(BI)
 	),
-	add([B|Bs], TXs, HashList, RewardAddr, RewardPool, WalletList).
-add(Bs, TXs, HashList, RewardAddr, RewardPool, WalletList) ->
-	add(Bs, TXs, HashList, RewardAddr, RewardPool, WalletList, []).
-add([Hash|Bs], TXs, HashList, RewardAddr, RewardPool, WalletList, Tags) when is_binary(Hash) ->
+	add([B|Bs], TXs, BI, RewardAddr, RewardPool, WalletList).
+add(Bs, TXs, BI, RewardAddr, RewardPool, WalletList) ->
+	add(Bs, TXs, BI, RewardAddr, RewardPool, WalletList, []).
+add([Hash|Bs], TXs, BI, RewardAddr, RewardPool, WalletList, Tags) when is_binary(Hash) ->
 	add(
-		[ar_storage:read_block(Hash, HashList)|Bs],
+		[ar_storage:read_block(Hash, BI)|Bs],
 		TXs,
-		HashList,
+		BI,
 		RewardAddr,
 		RewardPool,
 		WalletList,
 		Tags
 	);
-add(Bs, TXs, HashList, RewardAddr, RewardPool, WalletList, Tags) ->
-	RecallHash = ar_util:get_recall_hash(hd(Bs), HashList),
-	RecallB = ar_storage:read_block(RecallHash, HashList),
+add(Bs, TXs, BI, RewardAddr, RewardPool, WalletList, Tags) ->
+	RecallHash = ar_util:get_recall_hash(hd(Bs), BI),
+	RecallB = ar_storage:read_block(RecallHash, BI),
 	{Nonce, Timestamp, Diff} = mine(hd(Bs), RecallB, TXs, RewardAddr, Tags),
 	add(
 		Bs,
 		TXs,
-		HashList,
+		BI,
 		RewardAddr,
 		RewardPool,
 		WalletList,
@@ -120,11 +120,11 @@ add(Bs, TXs, HashList, RewardAddr, RewardPool, WalletList, Tags) ->
 		Nonce,
 		Timestamp
 	).
-add([Hash|Bs], RawTXs, HashList, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) when is_binary(Hash) ->
+add([Hash|Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) when is_binary(Hash) ->
 	add(
-		[ar_storage:read_block(Hash, HashList)|Bs],
+		[ar_storage:read_block(Hash, BI)|Bs],
 		RawTXs,
-		HashList,
+		BI,
 		RewardAddr,
 		RewardPool,
 		WalletList,
@@ -134,9 +134,9 @@ add([Hash|Bs], RawTXs, HashList, RewardAddr, RewardPool, WalletList, Tags, Recal
 		Nonce,
 		Timestamp
 	);
-add([CurrentB|_Bs], RawTXs, HashList, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) ->
+add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) ->
 	NewHeight = CurrentB#block.height + 1,
-	RecallB = ar_node_utils:find_recall_block(HashList),
+	RecallB = ar_node_utils:find_recall_block(BI),
 	TXs = [T#tx.id || T <- RawTXs],
 	BlockSize = lists:foldl(
 			fun(TX, Acc) ->
@@ -192,7 +192,7 @@ add([CurrentB|_Bs], RawTXs, HashList, RewardAddr, RewardPool, WalletList, Tags, 
 				NewHeight
 			),
 			txs = TXs,
-			block_index = HashList,
+			block_index = BI,
 			block_index_merkle = MR,
 			wallet_list = WalletList,
 			reward_addr = RewardAddr,
@@ -201,7 +201,7 @@ add([CurrentB|_Bs], RawTXs, HashList, RewardAddr, RewardPool, WalletList, Tags, 
 			weave_size = CurrentB#block.weave_size + BlockSize,
 			block_size = BlockSize
 		},
-	[NewB#block { indep_hash = indep_hash(NewB) }|HashList].
+	[NewB#block { indep_hash = indep_hash(NewB) }|BI].
 
 %% @doc Take a complete block list and return a list of block hashes.
 %% Throws an error if the block list is not complete.
@@ -219,12 +219,12 @@ generate_block_index([Hash|Bs], N) when is_binary(Hash) ->
 
 %% @doc Verify a block from a hash list. Hash lists are stored in reverse order
 verify_indep(#block{ height = 0 }, []) -> true;
-verify_indep(B = #block { height = Height }, HashList) ->
+verify_indep(B = #block { height = Height }, BI) ->
 	ComputedIndepHash = indep_hash(B),
-	ReversedHashList = lists:reverse(HashList),
+	ReversedBI = lists:reverse(BI),
 	BI = B#block.block_index,
 	ReversedBI = lists:reverse(BI),
-	ExpectedIndepHash = lists:nth(Height + 1, ReversedHashList),
+	ExpectedIndepHash = lists:nth(Height + 1, ReversedBI),
 	case ComputedIndepHash of
 		ExpectedIndepHash ->
 			true;
@@ -234,9 +234,9 @@ verify_indep(B = #block { height = Height }, HashList) ->
 				{height, Height},
 				{computed_indep_hash, ar_util:encode(ComputedIndepHash)},
 				{expected_indep_hash, ar_util:encode(ExpectedIndepHash)},
-				{block_index_length, length(HashList)},
-				{block_index_latest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(HashList, 10)))},
-				{block_index_eariest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(ReversedHashList, 10)))},
+				{block_index_length, length(BI)},
+				{block_index_latest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(BI, 10)))},
+				{block_index_eariest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(ReversedBI, 10)))},
 				{block_block_index_latest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(?BI_TO_BHL(lists:sublist(BI, 10))))},
 				{block_block_index_earliest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(?BI_TO_BHL(lists:sublist(ReversedBI, 10))))}
 			]),
@@ -287,7 +287,7 @@ indep_hash(#block {
 		diff = Diff,
 		height = Height,
 		hash = Hash,
-		block_index = HashList,
+		block_index = BI,
 		txs = TXs,
 		wallet_list = WalletList,
 		reward_addr = RewardAddr,
@@ -311,7 +311,7 @@ indep_hash(#block {
 					{hash, ar_util:encode(Hash)},
 					{indep_hash, ar_util:encode(<<>>)},
 					{txs, lists:map(EncodeTX, TXs)},
-					{block_index, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(HashList))},
+					{block_index, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(BI))},
 					{wallet_list,
 						lists:map(
 							fun({Wallet, Qty, Last}) ->

@@ -7,7 +7,7 @@ parse_test_() ->
 
 parse_config() ->
 	ExpectedMiningAddr = ar_util:decode(<<"LKC84RnISouGUw4uMQGCpPS9yDC-tIoqM2UVbUIt-Sw">>),
-	ExpectedStartHashList = ar_util:decode(<<"ZFTD3ne7_U3BONHi8O-QpBv0ZQTAXJ2eFIih8dod0f8">>),
+	ExpectedStartBI = ar_util:decode(<<"ZFTD3ne7_U3BONHi8O-QpBv0ZQTAXJ2eFIih8dod0f8">>),
 	ExpectedUpdateAddr = ar_util:decode(<<"V_zW1A2HeqWFBpwKCjyd8V6eI8S3ia8GOVA6g7YXAdU">>),
 	{ok, ParsedConfig} = ar_config:parse(config_fixture()),
 	?assertMatch(#config{
@@ -37,7 +37,7 @@ parse_config() ->
 		pause = true,
 		disk_space = 44*1024*1024*1024,
 		used_space = _,
-		start_block_index = ExpectedStartHashList,
+		start_block_index = ExpectedStartBI,
 		auto_update = ExpectedUpdateAddr,
 		internal_api_secret = <<"some_very_very_long_secret">>,
 		enable = [feature_1, feature_2],

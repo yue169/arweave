@@ -9,7 +9,7 @@
 %%% Once all the blocks since the two forks of the netwrok diverged have been
 %%% verified, the process returns this new state to its parent.
 %%%
-%%% Block shadows transmit the last 50 hashes of the hashlist, as such if a
+%%% Block shadows transmit the last 50 hashes of the block index, as such if a
 %%% node falls more than this limit behind the fork recovery process will fail.
 
 %% Defines the server state
@@ -25,7 +25,7 @@
 
 %% @doc Start the fork recovery 'catch up' server.
 %% TargetBShadow - a block shadow with the reconstructed hash list.
-start(Peers, TrustedPeers, TargetBShadow, HashList, Parent, BlockTXPairs) ->
+start(Peers, TrustedPeers, TargetBShadow, BI, Parent, BlockTXPairs) ->
 	case ?IS_BLOCK(TargetBShadow) of
 		true ->
 			ar:info(
@@ -49,7 +49,7 @@ start(Peers, TrustedPeers, TargetBShadow, HashList, Parent, BlockTXPairs) ->
 								TargetB = TargetBShadow,
 								DivergedHashes = drop_until_diverge(
 									lists:reverse(TargetB#block.block_index),
-									lists:reverse(HashList)
+									lists:reverse(BI)
 								) ++ [TargetB#block.indep_hash],
 								BlockList = (TargetB#block.block_index -- DivergedHashes),
 								server(
@@ -175,7 +175,7 @@ server(S = #state { target_block = TargetB }) ->
 do_fork_recover(S = #state {
 		block_list = BlockList,
 		peers = Peers,
-		block_index = [{NextH, _} | HashList],
+		block_index = [{NextH, _} | BI],
 		target_block = TargetB,
 		recovery_block_index = BI,
 		parent = Parent,
@@ -190,7 +190,7 @@ do_fork_recover(S = #state {
 					Block#block.weave_size
 				}
 			| Block#block.block_index],
-		% If the new retarget blocks hashlist contains the hash of the last
+		% If the new retarget blocks block index contains the hash of the last
 		% retarget should be recovering to the same fork.
 		NewToVerify =
 			case lists:member(TargetB#block.indep_hash, NewBI) of
@@ -257,7 +257,7 @@ do_fork_recover(S = #state {
 						{received_instead, NextB}
 					]
 				),
-				BHashList = unavailable,
+				BBI = unavailable,
 				B = unavailable,
 				RecallB = unavailable,
 				TXs = [];
@@ -283,7 +283,7 @@ do_fork_recover(S = #state {
 								recovery_block_is_genesis_block
 							]
 						),
-						BHashList = unavailable,
+						BBI = unavailable,
 						B = unavailable,
 						RecallB = unavailable,
 						TXs = [],
@@ -296,7 +296,7 @@ do_fork_recover(S = #state {
 								recovery_block_is_too_far_ahead
 							]
 						),
-						BHashList = unavailable,
+						BBI = unavailable,
 						B = unavailable,
 						RecallB = unavailable,
 						TXs = [],
@@ -307,11 +307,11 @@ do_fork_recover(S = #state {
 						B = ar_node:get_block(Peers, NextB#block.previous_block, BI),
 						case ?IS_BLOCK(B) of
 							false ->
-								BHashList = unavailable,
+								BBI = unavailable,
 								RecallB = unavailable,
 								TXs = [];
 							true ->
-								BHashList = [{B#block.indep_hash, B#block.weave_size}|B#block.block_index],
+								BBI = [{B#block.indep_hash, B#block.weave_size}|B#block.block_index],
 								case B#block.height of
 									0 -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, NextB#block.block_index), BI);
 									_ -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, B#block.block_index), BI)
@@ -331,7 +331,7 @@ do_fork_recover(S = #state {
 			false ->
 				case
 					try_apply_block(
-						BHashList,
+						BBI,
 						NextB#block {txs = [T#tx.id || T <- NextB#block.txs]},
 						TXs,
 						B,
@@ -393,7 +393,7 @@ do_fork_recover(S = #state {
 										{height, NextB#block.height}
 									]
 								),
-								Parent ! {fork_recovered, [NextH | BlockList], NewBlockTXPairs};
+								Parent ! {fork_recovered, [ NextH | BlockList], NewBlockTXPairs};
 							_ -> do_nothing
 						end,
 						self() ! apply_next_block,
@@ -403,7 +403,7 @@ do_fork_recover(S = #state {
 							S#state {
 								block_list = [NextH | BlockList],
 								block_txs_pairs = NewBlockTXPairs,
-								block_index = HashList
+								block_index = BI
 							}
 						)
 				end;
@@ -414,7 +414,7 @@ do_fork_recover(S = #state {
 
 %% @doc Try and apply a new block (NextB) to the current block (B).
 %% Returns	true if the block can be applied, otherwise false.
-try_apply_block(HashList, NextB, TXs, B, RecallB, BlockTXPairs) ->
+try_apply_block(BI, NextB, TXs, B, RecallB, BlockTXPairs) ->
 	{FinderReward, _} =
 		ar_node_utils:calculate_reward_pool(
 			B#block.reward_pool,
@@ -434,7 +434,7 @@ try_apply_block(HashList, NextB, TXs, B, RecallB, BlockTXPairs) ->
 			NextB#block.height
 		),
 	BlockValid = ar_node_utils:validate(
-		HashList,
+		BI,
 		WalletList,
 		NextB,
 		TXs,

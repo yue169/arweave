@@ -19,8 +19,8 @@ all() ->
 	io:format("Done!~n").	
 
 
-%% @doc Remove all blocks from blocks directory not in HashList
-remove_invalid_blocks(HashList) ->
+%% @doc Remove all blocks from blocks directory not in BI
+remove_invalid_blocks(BI) ->
 	DataDir = ar_meta_db:get(data_dir),
 	BlockDir = filename:join(DataDir, ?BLOCK_DIR),
 	{ok, RawFiles} = file:list_dir(BlockDir),
@@ -38,9 +38,9 @@ remove_invalid_blocks(HashList) ->
 		lists:filter(
 			fun(Y) ->
 				case lists:foldl(
-					fun(Z, Sum) -> Sum + string:str(Y, binary_to_list(ar_util:encode(Z))) end,
+					fun({Z, _}, Sum) -> Sum + string:str(Y, binary_to_list(ar_util:encode(Z))) end,
 					0,
-					HashList
+					BI
 				) of
 					0 -> true;
 					_ -> false

@@ -162,7 +162,11 @@ json_struct_to_block({BlockStruct}) ->
 	Height = find_value(<<"height">>, BlockStruct),
 	TXs = find_value(<<"txs">>, BlockStruct),
 	WalletList = find_value(<<"wallet_list">>, BlockStruct),
-	HashList = find_value(<<"block_index">>, BlockStruct),
+	BI =
+		case {find_value(<<"block_index">>, BlockStruct), find_value(<<"hash_list">>, BlockStruct)} of
+			{false, HL} -> HL;
+			{JSONBI, _} -> JSONBI
+		end,
 	Tags = find_value(<<"tags">>, BlockStruct),
 	Fork_1_8 = ar_fork:height_1_8(),
 	CDiff = case find_value(<<"cumulative_diff">>, BlockStruct) of
@@ -208,9 +212,9 @@ json_struct_to_block({BlockStruct}) ->
 			TXs
 		),
 		block_index =
-			case HashList of
+			case BI of
 				undefined -> unset;
-				_		  -> [ ar_util:decode(Hash) || Hash <- HashList ]
+				_		  -> json_struct_to_block_index(BI)
 			end,
 		wallet_list =
 			case is_binary(WalletList) of
@@ -543,7 +547,10 @@ block_index_roundtrip_test() ->
 	[B] = ar_weave:init(),
 	HL = [B#block.indep_hash, B#block.indep_hash],
 	JsonHL = jsonify(block_index_to_json_struct(HL)),
-	HL = json_struct_to_block_index(dejsonify(JsonHL)).
+	HL = ?BI_TO_BHL(json_struct_to_block_index(dejsonify(JsonHL))),
+	BI = [{B#block.indep_hash, 1}, {B#block.indep_hash, 2}],
+	JsonBI = jsonify(block_index_to_json_struct(BI)),
+	BI = json_struct_to_block_index(dejsonify(JsonBI)).
 
 query_roundtrip_test() ->
 	Query = {'equals', <<"TestName">>, <<"TestVal">>},

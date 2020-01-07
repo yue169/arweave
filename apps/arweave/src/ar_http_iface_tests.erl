@@ -951,11 +951,11 @@ get_tx_status_test() ->
 	receive after 1000 -> ok end,
 	{ok, {{<<"200">>, _}, _, Body, _, _}} = FetchStatus(),
 	{Res} = ar_serialize:dejsonify(Body),
-	HashList = ar_node:get_block_index(Node),
+	BI = ar_node:get_block_index(Node),
 	?assertEqual(
 		#{
-			<<"block_height">> => length(HashList) - 1,
-			<<"block_indep_hash">> => ar_util:encode(hd(HashList)),
+			<<"block_height">> => length(BI) - 1,
+			<<"block_indep_hash">> => ar_util:encode(element(1, hd(BI))),
 			<<"number_of_confirmations">> => 1
 		},
 		maps:from_list(Res)
@@ -968,8 +968,8 @@ get_tx_status_test() ->
 	{Res2} = ar_serialize:dejsonify(Body2),
 	?assertEqual(
 		#{
-			<<"block_height">> => length(HashList) - 1,
-			<<"block_indep_hash">> => ar_util:encode(hd(HashList)),
+			<<"block_height">> => length(BI) - 1,
+			<<"block_indep_hash">> => ar_util:encode(element(1, hd(BI))),
 			<<"number_of_confirmations">> => 2
 		},
 		maps:from_list(Res2)

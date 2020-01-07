@@ -196,8 +196,8 @@ get_block_and_trail(_Peers, NewB, []) ->
 	TXIDs = [TX#tx.id || TX <- NewB#block.txs],
 	ar_storage:write_block(NewB#block { txs = TXIDs }),
 	[{NewB#block.indep_hash, TXIDs}];
-get_block_and_trail(Peers, NewB, HashList) ->
-	get_block_and_trail(Peers, NewB, ?STORE_BLOCKS_BEHIND_CURRENT, HashList, []).
+get_block_and_trail(Peers, NewB, BI) ->
+	get_block_and_trail(Peers, NewB, ?STORE_BLOCKS_BEHIND_CURRENT, BI, []).
 
 get_block_and_trail(_, unavailable, _, _, BlockTXPairs) ->
 	BlockTXPairs;
@@ -219,7 +219,7 @@ get_block_and_trail(Peers, NewB, BehindCurrent, _, BlockTXPairs) when NewB#block
 	end;
 get_block_and_trail(_, _, 0, _, BlockTXPairs) ->
 	BlockTXPairs;
-get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs) ->
+get_block_and_trail(Peers, NewB, BehindCurrent, BI, BlockTXPairs) ->
 	PreviousBlock = ar_node_utils:get_full_block(
 		Peers,
 		NewB#block.previous_block,
@@ -227,7 +227,7 @@ get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs) ->
 	),
 	case ?IS_BLOCK(PreviousBlock) of
 		true ->
-			RecallBlock = ar_util:get_recall_hash(PreviousBlock, HashList),
+			RecallBlock = ar_util:get_recall_hash(PreviousBlock, BI),
 			ar_storage:write_full_block(NewB),
 			TXIDs = [TX#tx.id || TX <- NewB#block.txs],
 			NewBlockTXPairs = BlockTXPairs ++ [{NewB#block.indep_hash, TXIDs}],
@@ -239,7 +239,7 @@ get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs) ->
 							retrying
 						]
 					),
-					get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs);
+					get_block_and_trail(Peers, NewB, BehindCurrent, BI, BlockTXPairs);
 				RecallB ->
 					ar_storage:write_full_block(RecallB),
 					ar:info(
@@ -250,7 +250,7 @@ get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs) ->
 							{blocks_to_write, 2 * (BehindCurrent-1)}
 						]
 					),
-					get_block_and_trail(Peers, PreviousBlock, BehindCurrent-1, HashList, NewBlockTXPairs)
+					get_block_and_trail(Peers, PreviousBlock, BehindCurrent-1, BI, NewBlockTXPairs)
 			end;
 		false ->
 			ar:info(
@@ -260,7 +260,7 @@ get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs) ->
 				]
 			),
 			timer:sleep(3000),
-			get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs)
+			get_block_and_trail(Peers, NewB, BehindCurrent, BI, BlockTXPairs)
 	end.
 
 %% @doc Fills node to capacity based on weave storage limit.

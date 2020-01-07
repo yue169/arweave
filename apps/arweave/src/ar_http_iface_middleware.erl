@@ -388,10 +388,10 @@ handle(<<"GET">>, [<<"hash_list">>], Req, _Pid) ->
 	handle(<<"GET">>, [<<"block_index">>], Req, _Pid);
 handle(<<"GET">>, [<<"block_index">>], Req, _Pid) ->
 	ok = ar_semaphore:acquire(block_index_semaphore, infinity),
-	HashList = ar_node:get_block_index(whereis(http_entrypoint_node)),
+	BI = ar_node:get_block_index(whereis(http_entrypoint_node)),
 	{200, #{},
 		ar_serialize:jsonify(
-			ar_serialize:block_index_to_json_struct(format_bi_for_peer(HashList, Req))
+			ar_serialize:block_index_to_json_struct(format_bi_for_peer(BI, Req))
 		),
 	Req};
 
