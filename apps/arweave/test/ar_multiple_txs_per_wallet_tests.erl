@@ -12,7 +12,7 @@
 -import(ar_test_node, [assert_post_tx_to_slave/2, assert_post_tx_to_master/2]).
 -import(ar_test_node, [sign_tx/1, sign_tx/2, sign_tx/3]).
 -import(ar_test_node, [get_tx_anchor/0, get_tx_anchor/1, join/1]).
--import(ar_test_node, [assert_wait_until_block_hash_list/2]).
+-import(ar_test_node, [assert_wait_until_block_block_index/2]).
 -import(ar_test_node, [get_last_tx/1, get_last_tx/2]).
 -import(ar_test_node, [get_tx_confirmations/2]).
 -import(ar_test_node, [disconnect_from_slave/0]).
@@ -615,8 +615,8 @@ joins_network_successfully(ForkHeight) ->
 		lists:seq(ForkHeight + 1, ?MAX_TX_ANCHOR_DEPTH)
 	),
 	Master = join({127, 0, 0, 1, slave_call(ar_meta_db, get, [port])}),
-	BI = slave_call(ar_node, get_hash_list, [Slave]),
-	assert_wait_until_block_hash_list(Master, BI),
+	BI = slave_call(ar_node, get_block_index, [Slave]),
+	assert_wait_until_block_block_index(Master, BI),
 	TX1 = sign_tx(Key, #{ last_tx => lists:nth(?MAX_TX_ANCHOR_DEPTH + 1, BI) }),
 	{ok, {{<<"400">>, _}, _, <<"Invalid anchor (last_tx).">>, _, _}} =
 		post_tx_to_master(Master, TX1),

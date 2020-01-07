@@ -2,8 +2,8 @@
 -export([init/0, init/1, init/2, init/3, add/1, add/2, add/3, add/4, add/6, add/7, add/11]).
 -export([hash/3, indep_hash/1, header_hash/1]).
 -export([verify_indep/2]).
--export([generate_hash_list/1]).
--export([is_data_on_block_list/2, is_tx_on_block_list/2]).
+-export([generate_block_index/1]).
+-export([is_data_on_block_list/2]).
 -export([create_genesis_txs/0]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -26,7 +26,7 @@ init(WalletList, StartingDiff, RewardPool) ->
 			nonce = crypto:strong_rand_bytes(32),
 			txs = [],
 			wallet_list = WalletList,
-			hash_list = [],
+			block_index = [],
 			diff = StartingDiff,
 			weave_size = 0,
 			block_size = 0,
@@ -50,7 +50,7 @@ init(WalletList, StartingDiff, RewardPool) ->
 			nonce = crypto:strong_rand_bytes(32),
 			txs = TXs,
 			wallet_list = WalletList,
-			hash_list = [],
+			block_index = [],
 			diff = StartingDiff,
 			weave_size = 0,
 			block_size = 0,
@@ -65,7 +65,7 @@ init(WalletList, StartingDiff, RewardPool) ->
 add(Bs) ->
 	add(Bs, []).
 add(Bs, TXs) ->
-	add(Bs, TXs, generate_hash_list(Bs)).
+	add(Bs, TXs, generate_block_index(Bs)).
 add(Bs, TXs, HashList) ->
 	add(Bs, TXs, HashList, <<>>).
 add(Bs, TXs, HashList, unclaimed) ->
@@ -162,9 +162,9 @@ add([CurrentB|_Bs], RawTXs, HashList, RewardAddr, RewardPool, WalletList, Tags, 
 			_ when NewHeight < ?FORK_1_6 ->
 				<<>>;
 			_ when NewHeight == ?FORK_1_6 ->
-				ar_unbalanced_merkle:block_hash_list_to_merkle_root(CurrentB#block.hash_list);
+				ar_unbalanced_merkle:block_block_index_to_merkle_root(CurrentB#block.block_index);
 			_ ->
-				ar_unbalanced_merkle:root(CurrentB#block.hash_list_merkle, CurrentB#block.indep_hash)
+				ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.indep_hash)
 		end,
 	NewB =
 		#block {
@@ -192,8 +192,8 @@ add([CurrentB|_Bs], RawTXs, HashList, RewardAddr, RewardPool, WalletList, Tags, 
 				NewHeight
 			),
 			txs = TXs,
-			hash_list = HashList,
-			hash_list_merkle = MR,
+			block_index = HashList,
+			block_index_merkle = MR,
 			wallet_list = WalletList,
 			reward_addr = RewardAddr,
 			tags = Tags,
@@ -205,25 +205,25 @@ add([CurrentB|_Bs], RawTXs, HashList, RewardAddr, RewardPool, WalletList, Tags, 
 
 %% @doc Take a complete block list and return a list of block hashes.
 %% Throws an error if the block list is not complete.
-generate_hash_list(undefined) -> [];
-generate_hash_list([]) -> [];
-generate_hash_list(Bs = [B|_]) ->
-	generate_hash_list(Bs, B#block.height + 1).
-generate_hash_list([B = #block { hash_list = BHL }|_], _) when is_list(BHL) ->
-	[B#block.indep_hash|BHL];
-generate_hash_list([], 0) -> [];
-generate_hash_list([B|Bs], N) when is_record(B, block) ->
-	[B#block.indep_hash|generate_hash_list(Bs, N - 1)];
-generate_hash_list([Hash|Bs], N) when is_binary(Hash) ->
-	[Hash|generate_hash_list(Bs, N - 1)].
+generate_block_index(undefined) -> [];
+generate_block_index([]) -> [];
+generate_block_index(Bs = [B|_]) ->
+	generate_block_index(Bs, B#block.height + 1).
+generate_block_index([B = #block { block_index = BI }|_], _) when is_list(BI) ->
+	[{B#block.indep_hash, B#block.weave_size}|BI];
+generate_block_index([], 0) -> [];
+generate_block_index([B|Bs], N) when is_record(B, block) ->
+	[{B#block.indep_hash, B#block.weave_size}|generate_block_index(Bs, N - 1)];
+generate_block_index([Hash|Bs], N) when is_binary(Hash) ->
+	[{Hash, 0}|generate_block_index(Bs, N - 1)].
 
 %% @doc Verify a block from a hash list. Hash lists are stored in reverse order
 verify_indep(#block{ height = 0 }, []) -> true;
 verify_indep(B = #block { height = Height }, HashList) ->
 	ComputedIndepHash = indep_hash(B),
 	ReversedHashList = lists:reverse(HashList),
-	BHL = B#block.hash_list,
-	ReversedBHL = lists:reverse(BHL),
+	BI = B#block.block_index,
+	ReversedBI = lists:reverse(BI),
 	ExpectedIndepHash = lists:nth(Height + 1, ReversedHashList),
 	case ComputedIndepHash of
 		ExpectedIndepHash ->
@@ -234,11 +234,11 @@ verify_indep(B = #block { height = Height }, HashList) ->
 				{height, Height},
 				{computed_indep_hash, ar_util:encode(ComputedIndepHash)},
 				{expected_indep_hash, ar_util:encode(ExpectedIndepHash)},
-				{hash_list_length, length(HashList)},
-				{hash_list_latest_blocks, lists:map(fun ar_util:encode/1, lists:sublist(HashList, 10))},
-				{hash_list_eariest_blocks, lists:map(fun ar_util:encode/1, lists:sublist(ReversedHashList, 10))},
-				{block_hash_list_latest_blocks, lists:map(fun ar_util:encode/1, lists:sublist(BHL, 10))},
-				{block_hash_list_earlies_blocks, lists:map(fun ar_util:encode/1, lists:sublist(ReversedBHL, 10))}
+				{block_index_length, length(HashList)},
+				{block_index_latest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(HashList, 10)))},
+				{block_index_eariest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(ReversedHashList, 10)))},
+				{block_block_index_latest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(?BI_TO_BHL(lists:sublist(BI, 10))))},
+				{block_block_index_earliest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(?BI_TO_BHL(lists:sublist(ReversedBI, 10))))}
 			]),
 			false
 	end.
@@ -266,7 +266,7 @@ indep_hash(B = #block { height = Height }) when Height >= ?FORK_1_6 ->
 		integer_to_binary(B#block.cumulative_diff),
 		integer_to_binary(B#block.height),
 		B#block.hash,
-		B#block.hash_list_merkle,
+		B#block.block_index_merkle,
 		[tx_id(TX) || TX <- B#block.txs],
 		[[Addr, integer_to_binary(Balance), LastTX]
 			||	{Addr, Balance, LastTX} <- B#block.wallet_list],
@@ -287,7 +287,7 @@ indep_hash(#block {
 		diff = Diff,
 		height = Height,
 		hash = Hash,
-		hash_list = HashList,
+		block_index = HashList,
 		txs = TXs,
 		wallet_list = WalletList,
 		reward_addr = RewardAddr,
@@ -311,7 +311,7 @@ indep_hash(#block {
 					{hash, ar_util:encode(Hash)},
 					{indep_hash, ar_util:encode(<<>>)},
 					{txs, lists:map(EncodeTX, TXs)},
-					{hash_list, lists:map(fun ar_util:encode/1, HashList)},
+					{block_index, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(HashList))},
 					{wallet_list,
 						lists:map(
 							fun({Wallet, Qty, Last}) ->
@@ -358,7 +358,7 @@ header_hash(B) ->
 		integer_to_binary(B#block.diff),
 		integer_to_binary(B#block.height),
 		B#block.hash,
-		B#block.hash_list_merkle,
+		B#block.block_index_merkle,
 		B#block.tx_root,
 		WLH,
 		case B#block.reward_addr of
@@ -383,16 +383,6 @@ mine(B, RecallB, TXs, RewardAddr, Tags) ->
 	receive
 		{work_complete, _BH, TXs, _Hash, Diff, Nonce, Timestamp, _} ->
 			{Nonce, Timestamp, Diff}
-	end.
-
-%% @doc Return whether or not a transaction is found on a block list.
-is_tx_on_block_list([], _) -> false;
-is_tx_on_block_list([BHL = Hash|Bs], TXID) when is_binary(Hash) ->
-	is_tx_on_block_list([ar_storage:read_block(Hash, BHL)|Bs], TXID);
-is_tx_on_block_list([#block { txs = TXs }|Bs], TXID) ->
-	case lists:member(TXID, TXs) of
-		true -> true;
-		false -> is_tx_on_block_list(Bs, TXID)
 	end.
 
 is_data_on_block_list(_, _) -> false.

@@ -112,22 +112,22 @@ server(State) ->
 
 poll_new_blocks(State) ->
 	NodePid = whereis(http_entrypoint_node),
-	case {ar_node:get_current_block_hash(NodePid), ar_node:get_hash_list(NodePid)} of
+	case {ar_node:get_current_block_hash(NodePid), ar_node:get_block_index(NodePid)} of
 		{not_joined, _} ->
 			%% Add an extra poll soon
 			timer:send_after(1000, poll_new_blocks),
 			State;
 		{_, []} ->
-			%% ar_node:get_hash_list/1 timed out
+			%% ar_node:get_block_index/1 timed out
 			timer:send_after(10 * 1000, poll_new_blocks),
 			State;
 		{_, BI} ->
-			NewState = handle_new_block_hash_list(State, BI),
+			NewState = handle_new_block_block_index(State, BI),
 			timer:send_after(?RANDOMX_STATE_POLL_INTERVAL * 1000, poll_new_blocks),
 			NewState
 	end.
 
-handle_new_block_hash_list(State, BI) ->
+handle_new_block_block_index(State, BI) ->
 	CurrentHeight = length(BI) - 1,
 	State1 = remove_old_randomx_states(State, CurrentHeight),
 	case ensure_initialized(State1, swap_height(CurrentHeight)) of
@@ -266,7 +266,7 @@ randomx_key(SwapHeight) ->
 	end.
 
 get_block(Height) ->
-	case ar_node:get_hash_list(whereis(http_entrypoint_node)) of
+	case ar_node:get_block_index(whereis(http_entrypoint_node)) of
 		[] -> unavailable;
 		BI ->
 			{BH, _} = lists:nth(Height + 1, lists:reverse(BI)),

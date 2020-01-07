@@ -172,7 +172,7 @@ mine_blocks(Node, Total, Mined) ->
 	end.
 
 wait_for_blocks(Node, ExpectedLength) ->
-	BI = ar_node:get_hash_list(Node),
+	BI = ar_node:get_block_index(Node),
 	case length(BI) < ExpectedLength of
 		true ->
 			%% A relatively big interval is used here to give app_queue some time

@@ -8,7 +8,7 @@
 -export([encode/1, decode/1, safe_decode/1]).
 -export([parse_peer/1, parse_port/1, safe_parse_peer/1, format_peer/1, unique/1, count/2]).
 -export([replace/3]).
--export([block_from_hash_list/2, hash_from_hash_list/2]).
+-export([block_from_block_index/2, hash_from_block_index/2]).
 -export([get_recall_hash/2, get_recall_hash/3]).
 -export([height_from_hashes/1, wallets_from_hashes/1, blocks_from_hashes/1]).
 -export([get_hash/1, get_head_block/1]).
@@ -86,12 +86,12 @@ blocks_from_hashes(BHL) ->
 	lists:map(fun(BH) -> ar_storage:read_block(BH, BHL) end, BHL).
 
 %% @doc Fetch a block hash by number from a block hash list (and disk).
-hash_from_hash_list(Num, BHL) ->
-	lists:nth(Num - 1, lists:reverse(BHL)).
+hash_from_block_index(Num, BI) ->
+	element(1, lists:nth(Num - 1, lists:reverse(BI))).
 
 %% @doc Read a block at the given height from the hash list
-block_from_hash_list(Num, BHL) ->
-	ar_storage:read_block(hash_from_hash_list(Num, BHL), BHL).
+block_from_block_index(Num, BI) ->
+	ar_storage:read_block(hash_from_block_index(Num, BI), BI).
 
 %% @doc Fetch the head block using BHL.
 get_head_block(not_joined) -> unavailable;

@@ -37,7 +37,7 @@ parse_config() ->
 		pause = true,
 		disk_space = 44*1024*1024*1024,
 		used_space = _,
-		start_hash_list = ExpectedStartHashList,
+		start_block_index = ExpectedStartHashList,
 		auto_update = ExpectedUpdateAddr,
 		internal_api_secret = <<"some_very_very_long_secret">>,
 		enable = [feature_1, feature_2],

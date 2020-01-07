@@ -63,17 +63,17 @@ do_join(Node, RawPeers, NewB) ->
 				]
 			),
 			ar_miner_log:joining(),
-			ar_sqlite3:populate_db(NewB#block.hash_list),
-			ar_randomx_state:init(NewB#block.hash_list, Peers),
-			BlockTXPairs = get_block_and_trail(Peers, NewB, NewB#block.hash_list),
+			ar_sqlite3:populate_db(NewB#block.block_index),
+			ar_randomx_state:init(NewB#block.block_index, Peers),
+			BlockTXPairs = get_block_and_trail(Peers, NewB, NewB#block.block_index),
 			Node ! {
 				fork_recovered,
-				[NewB#block.indep_hash|NewB#block.hash_list],
+				[{NewB#block.indep_hash, NewB#block.weave_size}|NewB#block.block_index],
 				BlockTXPairs
 			},
 			join_peers(Peers),
 			ar_miner_log:joined(),
-			spawn(fun() -> fill_to_capacity(ar_manage_peers:get_more_peers(Peers), NewB#block.hash_list) end)
+			spawn(fun() -> fill_to_capacity(ar_manage_peers:get_more_peers(Peers), NewB#block.block_index) end)
 	end.
 
 %% @doc Verify timestamps of peers.
@@ -126,7 +126,7 @@ find_current_block([]) ->
 	ar:info("Did not manage to fetch current block from any of the peers. Will retry later."),
 	unavailable;
 find_current_block([Peer|Tail]) ->
-	try ar_node:get_hash_list(Peer) of
+	try ar_node:get_block_index(Peer) of
 		[] ->
 			find_current_block(Tail);
 		BI ->
@@ -206,7 +206,7 @@ get_block_and_trail(Peers, NewB, BehindCurrent, _, BlockTXPairs) when NewB#block
 	PreviousBlock = ar_node:get_block(
 		Peers,
 		NewB#block.previous_block,
-		NewB#block.hash_list
+		NewB#block.block_index
 	),
 	ar_storage:write_block(PreviousBlock),
 	TXIDs = [TX#tx.id || TX <- NewB#block.txs],
@@ -223,7 +223,7 @@ get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs) ->
 	PreviousBlock = ar_node_utils:get_full_block(
 		Peers,
 		NewB#block.previous_block,
-		NewB#block.hash_list
+		NewB#block.block_index
 	),
 	case ?IS_BLOCK(PreviousBlock) of
 		true ->
@@ -231,7 +231,7 @@ get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs) ->
 			ar_storage:write_full_block(NewB),
 			TXIDs = [TX#tx.id || TX <- NewB#block.txs],
 			NewBlockTXPairs = BlockTXPairs ++ [{NewB#block.indep_hash, TXIDs}],
-			case ar_node_utils:get_full_block(Peers, RecallBlock, NewB#block.hash_list) of
+			case ar_node_utils:get_full_block(Peers, RecallBlock, NewB#block.block_index) of
 				unavailable ->
 					ar:info(
 						[
@@ -264,11 +264,11 @@ get_block_and_trail(Peers, NewB, BehindCurrent, HashList, BlockTXPairs) ->
 	end.
 
 %% @doc Fills node to capacity based on weave storage limit.
-fill_to_capacity(Peers, BI) -> fill_to_capacity(Peers, ?BI_TO_BI(BI), BI).
+fill_to_capacity(Peers, BI) -> fill_to_capacity(Peers, BI, BI).
 fill_to_capacity(_, [], _) -> ok;
 fill_to_capacity(Peers, ToWrite, BI) ->
 	timer:sleep(1 * 1000),
-	RandHash = lists:nth(rand:uniform(length(ToWrite)), ToWrite),
+	{RandHash, _} = lists:nth(rand:uniform(length(ToWrite)), ToWrite),
 	case ar_storage:read_block(RandHash, BI) of
 		unavailable ->
 			fill_to_capacity2(Peers, RandHash, ToWrite, BI);
@@ -316,7 +316,7 @@ basic_node_join_test() ->
 		Node2 = ar_node:start([Node1]),
 		timer:sleep(1500),
 		[B|_] = ar_node:get_blocks(Node2),
-		2 = (ar_storage:read_block(B, ar_node:get_hash_list(Node1)))#block.height
+		2 = (ar_storage:read_block(B, ar_node:get_block_index(Node1)))#block.height
 	end}.
 
 %% @doc Ensure that both nodes can mine after a join.
@@ -334,5 +334,5 @@ node_join_test() ->
 		ar_node:mine(Node2),
 		timer:sleep(1500),
 		[B|_] = ar_node:get_blocks(Node1),
-		3 = (ar_storage:read_block(B, ar_node:get_hash_list(Node1)))#block.height
+		3 = (ar_storage:read_block(B, ar_node:get_block_index(Node1)))#block.height
 	end}.

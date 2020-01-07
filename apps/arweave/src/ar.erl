@@ -101,7 +101,7 @@ show_help() ->
 		[
 			{"config_file (path)", "Load configuration from specified file."},
 			{"peer (ip:port)", "Join a network on a peer (or set of peers)."},
-			{"start_hash_list (hash)", "Start the node from a given block."},
+			{"start_block_index (hash)", "Start the node from a given block."},
 			{"mine", "Automatically start mining once the netwok has been joined."},
 			{"port", "The local port to use for mining. "
 						"This port must be accessible by remote peers."},
@@ -208,7 +208,7 @@ parse_cli_args(["load_mining_key", File|Rest], C) ->
 parse_cli_args(["ipfs_pin" | Rest], C) ->
 	parse_cli_args(Rest, C#config { ipfs_pin = true });
 parse_cli_args(["start_block_index", BIHash|Rest], C) ->
-	parse_cli_args(Rest, C#config { start_hash_list = ar_util:decode(BIHash) });
+	parse_cli_args(Rest, C#config { start_block_index = ar_util:decode(BIHash) });
 parse_cli_args(["benchmark", Algorithm|Rest], C)->
 	parse_cli_args(Rest, C#config { benchmark = true, benchmark_algorithm = list_to_atom(Algorithm) });
 parse_cli_args(["auto_update", "false" | Rest], C) ->
@@ -277,7 +277,7 @@ start(
 		pause = Pause,
 		disk_space = DiskSpace,
 		used_space = UsedSpace,
-		start_hash_list = BI,
+		start_block_index = BI,
 		auto_update = AutoUpdate,
 		internal_api_secret = InternalApiSecret,
 		enable = Enable,
@@ -399,7 +399,7 @@ start(
 						true -> not_joined
 						end;
 					_ ->
-						ar_storage:read_block_hash_list(BI)
+						ar_storage:read_block_block_index(BI)
 				end,
 				0,
 				MiningAddress,

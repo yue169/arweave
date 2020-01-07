@@ -27,11 +27,11 @@
 
 %% @doc Get a full block (a block containing all transactions) by the independent hash.
 %%      Try to find the block locally first. If we do not have the full block on disk, try to download it from peers.
-get_full_block(Peers, ID, BHL) when is_list(Peers) ->
+get_full_block(Peers, ID, BI) when is_list(Peers) ->
 	GetBlockFromPeersFun = fun() ->
-		get_full_block_from_remote_peers(ar_util:unique(Peers), ID, BHL)
+		get_full_block_from_remote_peers(ar_util:unique(Peers), ID, BI)
 	end,
-	case ar_storage:read_block(ID, BHL) of
+	case ar_storage:read_block(ID, BI) of
 		unavailable ->
 			GetBlockFromPeersFun();
 		Block ->
@@ -48,17 +48,17 @@ get_full_block(Peers, ID, BHL) when is_list(Peers) ->
 					FinalB
 			end
 	end;
-get_full_block(Pid, ID, BHL) when is_pid(Pid) ->
+get_full_block(Pid, ID, BI) when is_pid(Pid) ->
 	%% Attempt to get block from local storage and add transactions.
-	case make_full_block(ID, BHL) of
+	case make_full_block(ID, BI) of
 		{ok, B} ->
 			B;
 		{error, _} ->
 			unavailable
 	end;
-get_full_block(Peer, ID, BHL) ->
+get_full_block(Peer, ID, BI) ->
 	%% Handle external peer request.
-	case ar_http_iface_client:get_full_block([Peer], ID, BHL) of
+	case ar_http_iface_client:get_full_block([Peer], ID, BI) of
 		{_Peer, B} ->
 			B;
 		Error ->
@@ -67,10 +67,10 @@ get_full_block(Peer, ID, BHL) ->
 
 %% @doc Attempt to get a full block from a HTTP peer, picking the node to query
 %% randomly until the block is retreived.
-get_full_block_from_remote_peers([], _ID, _BHL) ->
+get_full_block_from_remote_peers([], _ID, _BI) ->
 	unavailable;
-get_full_block_from_remote_peers(Peers, ID, BHL) ->
-	{Time, MaybeB} = timer:tc(fun() -> ar_http_iface_client:get_full_block(Peers, ID, BHL) end),
+get_full_block_from_remote_peers(Peers, ID, BI) ->
+	{Time, MaybeB} = timer:tc(fun() -> ar_http_iface_client:get_full_block(Peers, ID, BI) end),
 	case MaybeB of
 		{Peer, B} when ?IS_BLOCK(B) ->
 			case ar_meta_db:get(http_logging) of
@@ -90,8 +90,8 @@ get_full_block_from_remote_peers(Peers, ID, BHL) ->
 	end.
 
 %% @doc Search a block list for the next recall block.
-find_recall_block(BHL = [Hash]) ->
-	ar_storage:read_block(Hash, BHL);
+find_recall_block(BI = [{Hash, _}]) ->
+	ar_storage:read_block(Hash, BI);
 find_recall_block(HashList) ->
 	Block = ar_storage:read_block(hd(HashList), HashList),
 	RecallHash = ar_util:get_recall_hash(Block, HashList),
@@ -287,13 +287,13 @@ wallet_list_from_wallet_map(WalletMap) ->
 start_mining(StateIn) ->
 	start_mining(StateIn, unforced).
 
-start_mining(#{hash_list := not_joined} = StateIn, _) ->
+start_mining(#{block_index := not_joined} = StateIn, _) ->
 	% We don't have a block list. Wait until we have one before
 	% starting to mine.
 	StateIn;
 start_mining(#{
 		node := Node,
-		hash_list := BI,
+		block_index := BI,
 		weave_size := WeaveSize,
 		txs := TXs,
 		reward_addr := RewardAddr,
@@ -343,19 +343,19 @@ start_mining(#{
 	end;
 start_mining(#{
 		node := Node,
-		hash_list := BHL,
+		block_index := BI,
 		txs := TXs,
 		reward_addr := RewardAddr,
 		tags := Tags,
 		block_txs_pairs := BlockTXPairs } = StateIn, ForceDiff) ->
 	% TODO REMOVE after 2.0
-	case find_recall_block(BHL) of
+	case find_recall_block(BI) of
 		unavailable ->
-			B = ar_storage:read_block(hd(BHL), BHL),
-			RecallHash = ar_util:get_recall_hash(B, BHL),
+			B = ar_storage:read_block(element(1, hd(BI)), BI),
+			RecallHash = ar_util:get_recall_hash(B, BI),
 			% TODO: Cleanup.
 			% FullBlock = get_encrypted_full_block(ar_bridge:get_remote_peers(whereis(http_bridge_node)), RecallHash),
-			FullBlock = get_full_block(ar_bridge:get_remote_peers(whereis(http_bridge_node)), RecallHash, BHL),
+			FullBlock = get_full_block(ar_bridge:get_remote_peers(whereis(http_bridge_node)), RecallHash, BI),
 			case FullBlock of
 				X when (X == unavailable) or (X == not_found) ->
 					ar:info(
@@ -365,7 +365,7 @@ start_mining(#{
 						]
 					);
 				_ ->
-					case ar_weave:verify_indep(FullBlock, BHL) of
+					case ar_weave:verify_indep(FullBlock, BI) of
 						true ->
 							ar_storage:write_full_block(FullBlock),
 							ar:info(
@@ -394,22 +394,22 @@ start_mining(#{
 			end,
 			case make_full_block(
 				RecallB#block.indep_hash,
-				BHL
+				BI
 			) of
 				{ok, RecallBFull} ->
 					ar_key_db:put(
 						RecallB#block.indep_hash,
 						[
 							{
-								ar_block:generate_block_key(RecallBFull, hd(BHL)),
-								binary:part(hd(BHL), 0, 16)
+								ar_block:generate_block_key(RecallBFull, element(1, hd(BI))),
+								binary:part(element(1, hd(BI)), 0, 16)
 							}
 						]
 					);
 				{error, _} ->
 					do_nothing
 			end,
-			B = ar_storage:read_block(hd(BHL), BHL),
+			B = ar_storage:read_block(element(1, hd(BI)), BI),
 			case ForceDiff of
 				unforced ->
 					Miner = ar_mine:start(
@@ -455,7 +455,7 @@ reset_miner(#{ miner := Pid, automine := true } = StateIn) ->
 integrate_new_block(
 		#{
 			txs := TXs,
-			hash_list := HashList,
+			block_index := HashList,
 			block_txs_pairs := BlockTXPairs
 		} = StateIn,
 		NewB,
@@ -468,7 +468,7 @@ integrate_new_block(
 	%% up, it should be fine.
 	%% Write new block and included TXs to local storage.
 	ar_storage:write_full_block(NewB, BlockTXs),
-	NewBHL = [NewB#block.indep_hash | HashList],
+	NewBI = [ {NewB#block.indep_hash, NewB#block.weave_size} | HashList],
 	NewBlockTXPairs = update_block_txs_pairs(
 		NewB#block.indep_hash,
 		[TX#tx.id || TX <- BlockTXs],
@@ -497,7 +497,7 @@ integrate_new_block(
 			PID ! {parent_accepted_block, NewB}
 	end,
 	reset_miner(StateIn#{
-		hash_list       => NewBHL,
+		block_index       => NewBI,
 		current         => NewB#block.indep_hash,
 		txs             => ValidTXs,
 		height          => NewB#block.height,
@@ -529,7 +529,7 @@ log_invalid_txs_drop_reason(InvalidTXs) ->
 	).
 
 %% @doc Recovery from a fork.
-fork_recover(#{ node := Node, hash_list := HashList, block_txs_pairs := BlockTXPairs } = StateIn, Peer, NewB) ->
+fork_recover(#{ node := Node, block_index := HashList, block_txs_pairs := BlockTXPairs } = StateIn, Peer, NewB) ->
 	case {whereis(fork_recovery_server), whereis(join_server)} of
 		{undefined, undefined} ->
 			PrioritisedPeers = ar_util:unique(Peer) ++
@@ -562,7 +562,7 @@ fork_recover(#{ node := Node, hash_list := HashList, block_txs_pairs := BlockTXP
 	StateIn.
 
 %% @doc Validate a block, given a node state and the dependencies.
-validate(#{ hash_list := HashList, wallet_list := WalletList }, B, TXs, OldB, RecallB) ->
+validate(#{ block_index := HashList, wallet_list := WalletList }, B, TXs, OldB, RecallB) ->
 	validate(HashList, WalletList, B, TXs, OldB, RecallB, B#block.reward_addr, B#block.tags).
 
 %% @doc Validate a new block, given a server state, a claimed new block, the last block,
@@ -572,7 +572,7 @@ validate(
 		WalletList,
 		NewB =
 			#block {
-				hash_list = BI,
+				block_index = BI,
 				wallet_list = WalletList,
 				nonce = Nonce,
 				diff = Diff,
@@ -607,8 +607,8 @@ validate(
 					{height, ar_block:verify_height(NewB, OldB)},
 					{last_retarget, ar_block:verify_last_retarget(NewB, OldB)},
 					{previous_block, ar_block:verify_previous_block(NewB, OldB)},
-					{block_index, ar_block:verify_block_hash_list(NewB, OldB)},
-					{block_index_root, ar_block:verify_block_hash_list_merkle(NewB, OldB)},
+					{block_index, ar_block:verify_block_block_index(NewB, OldB)},
+					{block_index_root, ar_block:verify_block_block_index_merkle(NewB, OldB)},
 					{wallet_list2, ar_block:verify_wallet_list(NewB, OldB, undefined, TXs)},
 					{cumulative_difficulty, ar_block:verify_cumulative_diff(NewB, OldB)}
 				]
@@ -641,7 +641,7 @@ validate(
 		WalletList,
 		NewB =
 			#block {
-				hash_list = HashList,
+				block_index = HashList,
 				wallet_list = WalletList,
 				nonce = Nonce,
 				diff = Diff,
@@ -672,8 +672,8 @@ validate(
 	HeightCheck = ar_block:verify_height(NewB, OldB),
 	RetargetCheck = ar_block:verify_last_retarget(NewB, OldB),
 	PreviousBCheck = ar_block:verify_previous_block(NewB, OldB),
-	HashlistCheck = ar_block:verify_block_hash_list(NewB, OldB),
-	BHLMerkleCheck = ar_block:verify_block_hash_list_merkle(NewB, OldB),
+	HashlistCheck = ar_block:verify_block_block_index(NewB, OldB),
+	BIMerkleCheck = ar_block:verify_block_block_index_merkle(NewB, OldB),
 	WalletListCheck = ar_block:verify_wallet_list(NewB, OldB, RecallB, TXs),
 	CumulativeDiffCheck = ar_block:verify_cumulative_diff(NewB, OldB),
 
@@ -694,10 +694,10 @@ validate(
 			{block_height, HeightCheck},
 			{block_retarget_time, RetargetCheck},
 			{block_previous_check, PreviousBCheck},
-			{block_hash_list, HashlistCheck},
+			{block_block_index, HashlistCheck},
 			{block_wallet_list, WalletListCheck},
 			{block_cumulative_diff, CumulativeDiffCheck},
-			{hash_list_merkle, BHLMerkleCheck}
+			{block_index_merkle, BIMerkleCheck}
 		]
 	),
 
@@ -725,10 +725,10 @@ validate(
 	case HeightCheck of false -> ar:info(invalid_height); _ -> ok end,
 	case RetargetCheck of false -> ar:info(invalid_retarget); _ -> ok end,
 	case PreviousBCheck of false -> ar:info(invalid_previous_block); _ -> ok end,
-	case HashlistCheck of false -> ar:info(invalid_hash_list); _ -> ok end,
+	case HashlistCheck of false -> ar:info(invalid_block_index); _ -> ok end,
 	case WalletListCheck of false -> ar:info(invalid_wallet_list_rewards); _ -> ok end,
 	case CumulativeDiffCheck of false -> ar:info(invalid_cumulative_diff); _ -> ok end,
-	case BHLMerkleCheck of false -> ar:info(invalid_hash_list_merkle); _ -> ok end,
+	case BIMerkleCheck of false -> ar:info(invalid_block_index_merkle); _ -> ok end,
 
 	Valid = (Mine
 		andalso Wallet
@@ -745,7 +745,7 @@ validate(
 		andalso HashlistCheck
 		andalso WalletListCheck
 		andalso CumulativeDiffCheck
-		andalso BHLMerkleCheck),
+		andalso BIMerkleCheck),
 	InvalidReasons = case Hash of
 		true -> [];
 		false -> [dep_hash]
@@ -756,13 +756,13 @@ validate(
 		false ->
 			{invalid, InvalidReasons}
 	end;
-validate(_HL, WL, NewB = #block { hash_list = unset }, TXs, OldB, RecallB, _, _) ->
+validate(_HL, WL, NewB = #block { block_index = unset }, TXs, OldB, RecallB, _, _) ->
 	validate(unset, WL, NewB, TXs, OldB, RecallB, unclaimed, []);
 validate(HL, _WL, NewB = #block { wallet_list = undefined }, TXs,OldB, RecallB, _, _) ->
 	validate(HL, undefined, NewB, TXs, OldB, RecallB, unclaimed, []);
 validate(_HL, _WL, NewB, _TXs, _OldB, _RecallB, _, _) ->
 	ar:info([{block_not_accepted, ar_util:encode(NewB#block.indep_hash)}]),
-	{invalid, [hash_list_or_wallet_list]}.
+	{invalid, [block_index_or_wallet_list]}.
 
 %% @doc Ensure that all wallets in the wallet list have a positive balance.
 validate_wallet_list([]) ->
@@ -779,8 +779,8 @@ validate_wallet_list([_ | Rest]) ->
 %%%
 
 %% @doc Read a block shadow from disk, read its transactions from disk.
-make_full_block(ID, BHL) ->
-	make_full_block(ar_storage:read_block(ID, BHL)).
+make_full_block(ID, BI) ->
+	make_full_block(ar_storage:read_block(ID, BI)).
 
 make_full_block(unavailable) ->
 	{error, unavailable};

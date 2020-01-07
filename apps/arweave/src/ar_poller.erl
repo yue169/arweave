@@ -100,7 +100,7 @@ poll_block_step(check_ignore_list, {Peer, BShadow}) ->
 			{error, block_already_received};
 		false ->
 			ar_bridge:ignore_id(BH),
-			case catch poll_block_step(construct_hash_list, {Peer, BShadow}) of
+			case catch poll_block_step(construct_block_index, {Peer, BShadow}) of
 				ok ->
 					ok;
 				Error ->
@@ -108,13 +108,13 @@ poll_block_step(check_ignore_list, {Peer, BShadow}) ->
 					Error
 			end
 	end;
-poll_block_step(construct_hash_list, {Peer, BShadow}) ->
+poll_block_step(construct_block_index, {Peer, BShadow}) ->
 	Node = whereis(http_entrypoint_node),
 	{ok, BlockTXsPairs} = ar_node:get_block_txs_pairs(Node),
 	HL = lists:map(fun({BH, _}) -> BH end, BlockTXsPairs),
-	case reconstruct_block_hash_list(Peer, BShadow, HL) of
+	case reconstruct_block_block_index(Peer, BShadow, HL) of
 		{ok, BI} ->
-			poll_block_step(accept_block, {Peer, BShadow#block{ hash_list = BI }});
+			poll_block_step(accept_block, {Peer, BShadow#block{ block_index = BI }});
 		{error, _} = Error ->
 			Error
 	end;
@@ -124,13 +124,13 @@ poll_block_step(accept_block, {Peer, BShadow}) ->
 	Node ! {new_block, Peer, BShadowHeight, BShadow, no_data_segment, no_recall},
 	ok.
 
-reconstruct_block_hash_list(Peer, FetchedBShadow, BehindCurrentHL) ->
-	reconstruct_block_hash_list(Peer, FetchedBShadow, BehindCurrentHL, []).
+reconstruct_block_block_index(Peer, FetchedBShadow, BehindCurrentHL) ->
+	reconstruct_block_block_index(Peer, FetchedBShadow, BehindCurrentHL, []).
 
-reconstruct_block_hash_list(_Peer, _FetchedBShadow, _BehindCurrentHL, FetchedHL)
+reconstruct_block_block_index(_Peer, _FetchedBShadow, _BehindCurrentHL, FetchedHL)
 		when length(FetchedHL) >= ?STORE_BLOCKS_BEHIND_CURRENT ->
-	{error, failed_to_reconstruct_block_hash_list};
-reconstruct_block_hash_list(Peer, FetchedBShadow, BehindCurrentHL, FetchedHL) ->
+	{error, failed_to_reconstruct_block_block_index};
+reconstruct_block_block_index(Peer, FetchedBShadow, BehindCurrentHL, FetchedHL) ->
 	PrevH = FetchedBShadow#block.previous_block,
 	case lists:dropwhile(fun(H) -> H /= PrevH end, BehindCurrentHL) of
 		[PrevH | _] = L ->
@@ -140,6 +140,6 @@ reconstruct_block_hash_list(Peer, FetchedBShadow, BehindCurrentHL, FetchedHL) ->
 				unavailable ->
 					{error, previous_block_not_found};
 				{_, PrevBShadow} ->
-					reconstruct_block_hash_list(Peer, PrevBShadow, BehindCurrentHL, [PrevH | FetchedHL])
+					reconstruct_block_block_index(Peer, PrevBShadow, BehindCurrentHL, [PrevH | FetchedHL])
 			end
 	end.

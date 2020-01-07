@@ -176,7 +176,7 @@ handle(<<"GET">>, [<<"tx">>, Hash, <<"status">>], Req, _Pid) ->
 						{<<"block_height">>, Height},
 						{<<"block_indep_hash">>, EncodedIndepHash}
 					],
-					CurrentBI = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+					CurrentBI = ar_node:get_block_index(whereis(http_entrypoint_node)),
 					case lists:member(ar_util:decode(EncodedIndepHash), CurrentBI) of
 						false ->
 							{404, #{}, <<"Not Found.">>, Req};
@@ -383,13 +383,15 @@ handle(<<"GET">>, [<<"price">>, SizeInBytesBinary, Addr], Req, _Pid) ->
 	end;
 
 %% @doc Return the current hash list held by the node.
-%% GET request to endpoint /hash_list
+%% GET request to endpoint /block_index
 handle(<<"GET">>, [<<"hash_list">>], Req, _Pid) ->
-	ok = ar_semaphore:acquire(hash_list_semaphore, infinity),
-	HashList = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+	handle(<<"GET">>, [<<"block_index">>], Req, _Pid);
+handle(<<"GET">>, [<<"block_index">>], Req, _Pid) ->
+	ok = ar_semaphore:acquire(block_index_semaphore, infinity),
+	HashList = ar_node:get_block_index(whereis(http_entrypoint_node)),
 	{200, #{},
 		ar_serialize:jsonify(
-			ar_serialize:hash_list_to_json_struct(HashList)
+			ar_serialize:block_index_to_json_struct(format_bi_for_peer(HashList, Req))
 		),
 	Req};
 
@@ -466,7 +468,7 @@ handle(<<"GET">>, [<<"wallet">>, Addr, <<"last_tx">>], Req, _Pid) ->
 
 %% @doc Return a block anchor to use for building transactions.
 handle(<<"GET">>, [<<"tx_anchor">>], Req, _Pid) ->
-	case ar_node:get_hash_list(whereis(http_entrypoint_node)) of
+	case ar_node:get_block_index(whereis(http_entrypoint_node)) of
 		[] ->
 			{400, #{}, <<"The node has not joined the network yet.">>, Req};
 		BI when is_list(BI) ->
@@ -474,7 +476,7 @@ handle(<<"GET">>, [<<"tx_anchor">>], Req, _Pid) ->
 				200,
 				#{},
 				ar_util:encode(
-					lists:nth(min(length(BI), (?MAX_TX_ANCHOR_DEPTH)) div 2 + 1, BI)
+					element(1, lists:nth(min(length(BI), (?MAX_TX_ANCHOR_DEPTH)) div 2 + 1, BI))
 				),
 				Req
 			}
@@ -577,39 +579,6 @@ handle(<<"GET">>, [<<"block">>, Type, ID], Req, _Pid) ->
 			case {ar_meta_db:get(api_compat), cowboy_req:header(<<"x-block-format">>, Req, <<"2">>)} of
 				{false, <<"1">>} ->
 					{426, #{}, <<"Client version incompatible.">>, Req};
-				{_, <<"1">>} ->
-					% Supprt for legacy nodes (pre-1.5).
-					BI = ar_node:get_hash_list(whereis(http_entrypoint_node)),
-					try ar_storage:read_block_file(Filename, BI) of
-						B ->
-							{JSONStruct} =
-								ar_serialize:block_to_json_struct(
-									B#block {
-										txs =
-											[
-												if is_binary(TX) -> TX; true -> TX#tx.id end
-											||
-												TX <- B#block.txs
-											]
-									}
-								),
-							{200, #{},
-								ar_serialize:jsonify(
-									{
-										[
-											{
-												<<"hash_list">>,
-												ar_serialize:hash_list_to_json_struct(B#block.hash_list)
-											}
-										|
-											JSONStruct
-										]
-									}
-								),
-							Req}
-					catch error:cannot_generate_block_hash_list ->
-						{404, #{}, <<"Requested block not found on block hash list.">>, Req}
-					end;
 				{_, _} ->
 					{200, #{}, sendfile(Filename), Req}
 			end
@@ -628,7 +597,7 @@ handle(<<"GET">>, [<<"block">>, Type, IDBin, Field], Req, _Pid) ->
 %% GET request to endpoint /current_block
 %% GET request to endpoint /block/current
 handle(<<"GET">>, [<<"block">>, <<"current">>], Req, Pid) ->
-	case ar_node:get_hash_list(whereis(http_entrypoint_node)) of
+	case ar_node:get_block_index(whereis(http_entrypoint_node)) of
 		[] -> {404, #{}, <<"Block not found.">>, Req};
 		[IndepHash|_] ->
 			handle(<<"GET">>, [<<"block">>, <<"hash">>, ar_util:encode(IndepHash)], Req, Pid)
@@ -711,6 +680,12 @@ arweave_peer(Req) ->
 			Binary -> binary_to_integer(Binary)
 		end,
 	{IpV4_1, IpV4_2, IpV4_3, IpV4_4, ArweavePeerPort}.
+
+format_bi_for_peer(BI, Req) ->
+	case cowboy_req:header(<<"x-block-format">>, Req, <<"2">>) of
+		<<"2">> -> ?BI_TO_BHL(BI);
+		_ -> BI
+	end.
 
 sendfile(Filename) ->
 	{sendfile, 0, filelib:file_size(Filename), Filename}.
@@ -956,7 +931,7 @@ block_field_to_string(<<"height">>, Res) -> integer_to_list(Res);
 block_field_to_string(<<"hash">>, Res) -> Res;
 block_field_to_string(<<"indep_hash">>, Res) -> Res;
 block_field_to_string(<<"txs">>, Res) -> ar_serialize:jsonify(Res);
-block_field_to_string(<<"hash_list">>, Res) -> ar_serialize:jsonify(Res);
+block_field_to_string(<<"block_index">>, Res) -> ar_serialize:jsonify(Res);
 block_field_to_string(<<"wallet_list">>, Res) -> ar_serialize:jsonify(Res);
 block_field_to_string(<<"reward_addr">>, Res) -> Res.
 
@@ -1207,7 +1182,9 @@ post_block_reject_warn(BShadow, Step, Peer, Params) ->
 
 %% @doc Return the block hash list associated with a block.
 process_request(get_block, [Type, ID, <<"hash_list">>], Req) ->
-	CurrentBI = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+	process_request(get_block, [Type, ID, <<"block_index">>], Req);
+process_request(get_block, [Type, ID, <<"block_index">>], Req) ->
+	CurrentBI = ar_node:get_block_index(whereis(http_entrypoint_node)),
 	case is_block_known(Type, ID, CurrentBI) of
 		true ->
 			Hash =
@@ -1220,11 +1197,11 @@ process_request(get_block, [Type, ID, <<"hash_list">>], Req) ->
 						B#block.indep_hash;
 					<<"hash">> -> ID
 				end,
-			BlockBI = ar_block:generate_hash_list_for_block(Hash, CurrentBI),
+			BlockBI = ar_block:generate_block_index_for_block(Hash, CurrentBI),
 			{200, #{},
 				ar_serialize:jsonify(
-					ar_serialize:hash_list_to_json_struct(
-						BlockBI
+					ar_serialize:block_index_to_json_struct(
+						format_bi_for_peer(BlockBI, Req)
 					)
 				),
 			Req};
@@ -1235,7 +1212,7 @@ process_request(get_block, [Type, ID, <<"hash_list">>], Req) ->
 %% or height).
 process_request(get_block, [Type, ID, <<"wallet_list">>], Req) ->
 	HTTPEntryPointPid = whereis(http_entrypoint_node),
-	CurrentBI = ar_node:get_hash_list(HTTPEntryPointPid),
+	CurrentBI = ar_node:get_block_index(HTTPEntryPointPid),
 	case is_block_known(Type, ID, CurrentBI) of
 		false -> {404, #{}, <<"Block not found.">>, Req};
 		true ->
@@ -1257,10 +1234,10 @@ process_request(get_block, [Type, ID, <<"wallet_list">>], Req) ->
 %% GET request to endpoint /block/hash/{hash|height}/{field}
 %%
 %% {field} := { nonce | previous_block | timestamp | last_retarget | diff | height | hash | indep_hash
-%%				txs | hash_list | wallet_list | reward_addr | tags | reward_pool }
+%%				txs | block_index | wallet_list | reward_addr | tags | reward_pool }
 %%
 process_request(get_block, [Type, ID, Field], Req) ->
-	CurrentBI = ar_node:get_hash_list(whereis(http_entrypoint_node)),
+	CurrentBI = ar_node:get_block_index(whereis(http_entrypoint_node)),
 	case ar_meta_db:get(subfield_queries) of
 		true ->
 			case find_block(Type, ID, CurrentBI) of

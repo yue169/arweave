@@ -4,7 +4,7 @@
 -export([json_struct_to_poa/1, poa_to_json_struct/1]).
 -export([tx_to_json_struct/1, json_struct_to_tx/1]).
 -export([wallet_list_to_json_struct/1, json_struct_to_wallet_list/1]).
--export([hash_list_to_json_struct/1, json_struct_to_hash_list/1]).
+-export([block_index_to_json_struct/1, json_struct_to_block_index/1]).
 -export([jsonify/1, dejsonify/1, json_decode/1, json_decode/2]).
 -export([query_to_json_struct/1, json_struct_to_query/1]).
 -include("ar.hrl").
@@ -63,7 +63,7 @@ block_to_json_struct(
 		weave_size = WeaveSize,
 		block_size = BlockSize,
 		cumulative_diff = CDiff,
-		hash_list_merkle = MR,
+		block_index_merkle = MR,
 		poa = POA
 	}) ->
 	{JSONDiff, JSONCDiff} = case ar_fork:height_1_8() of
@@ -123,12 +123,14 @@ block_to_json_struct(
 			{weave_size, WeaveSize},
 			{block_size, BlockSize},
 			{cumulative_diff, JSONCDiff},
+			{block_index_merkle, ar_util:encode(MR)},
+			% TODO: Remove this after all nodes have upgraded to 2.0.
 			{hash_list_merkle, ar_util:encode(MR)},
 			{poa, poa_to_json_struct(POA)}
 		],
 	case Height < ?FORK_1_6 of
 		true ->
-			KeysToDelete = [cumulative_diff, hash_list_merkle],
+			KeysToDelete = [cumulative_diff, block_index_merkle],
 			{delete_keys(KeysToDelete, JSONElements)};
 		false ->
 			{JSONElements}
@@ -160,7 +162,7 @@ json_struct_to_block({BlockStruct}) ->
 	Height = find_value(<<"height">>, BlockStruct),
 	TXs = find_value(<<"txs">>, BlockStruct),
 	WalletList = find_value(<<"wallet_list">>, BlockStruct),
-	HashList = find_value(<<"hash_list">>, BlockStruct),
+	HashList = find_value(<<"block_index">>, BlockStruct),
 	Tags = find_value(<<"tags">>, BlockStruct),
 	Fork_1_8 = ar_fork:height_1_8(),
 	CDiff = case find_value(<<"cumulative_diff">>, BlockStruct) of
@@ -173,7 +175,7 @@ json_struct_to_block({BlockStruct}) ->
 		BinaryDiff when Height >= Fork_1_8 -> binary_to_integer(BinaryDiff);
 		D -> D
 	end,
-	MR = case find_value(<<"hash_list_merkle">>, BlockStruct) of
+	MR = case find_value(<<"block_index_merkle">>, BlockStruct) of
 		_ when Height < ?FORK_1_6 -> <<>>;
 		undefined -> <<>>; % In case it's an invalid block (in the pre-fork format)
 		R -> ar_util:decode(R)
@@ -205,7 +207,7 @@ json_struct_to_block({BlockStruct}) ->
 			end,
 			TXs
 		),
-		hash_list =
+		block_index =
 			case HashList of
 				undefined -> unset;
 				_		  -> [ ar_util:decode(Hash) || Hash <- HashList ]
@@ -241,7 +243,7 @@ json_struct_to_block({BlockStruct}) ->
 		weave_size = find_value(<<"weave_size">>, BlockStruct),
 		block_size = find_value(<<"block_size">>, BlockStruct),
 		cumulative_diff = CDiff,
-		hash_list_merkle = MR,
+		block_index_merkle = MR,
 		tx_root =
 			case find_value(<<"tx_root">>, BlockStruct) of
 				undefined -> <<>>;
@@ -461,13 +463,31 @@ do_json_struct_to_query({Query}) ->
 do_json_struct_to_query(Query) ->
 	Query.
 
-%% @doc Generate a JSON structure representing a block hash list.
-hash_list_to_json_struct(BHL) ->
-	lists:map(fun ar_util:encode/1, BHL).
+%% @doc Generate a JSON structure representing a block hash list OR block index.
+block_index_to_json_struct(BI) ->
+	lists:map(
+		fun({BH, WeaveSize}) ->
+			[
+				{hash, ar_util:encode(BH)},
+				{weave_size, integer_to_binary(WeaveSize)}
+			];
+		   (BH) -> ar_util:encode(BH)
+		end,
+		BI
+	).
 
-%% @doc Convert a JSON structure into a block hash list.
-json_struct_to_hash_list(JSONStruct) ->
-	lists:map(fun ar_util:decode/1, JSONStruct).
+%% @doc Convert a JSON structure into a block index.
+json_struct_to_block_index(JSONStruct) ->
+	lists:map(
+		fun(Hash) when is_list(Hash) ->
+				ar_util:decode(Hash);
+		   (JSON) ->
+				Hash = ar_util:decode(find_value(<<"hash">>, JSON)),
+				WeaveSize = binary_to_integer(find_value(<<"weave_size">>, JSON)),
+				{Hash, WeaveSize}
+		end,
+		JSONStruct
+	).
 
 %%% Tests: ar_serialize
 
@@ -476,7 +496,7 @@ block_roundtrip_test() ->
 	[B] = ar_weave:init(),
 	JSONStruct = jsonify(block_to_json_struct(B)),
 	BRes = json_struct_to_block(JSONStruct),
-	B = BRes#block { hash_list = B#block.hash_list }.
+	B = BRes#block { block_index = B#block.block_index }.
 
 %% @doc Convert a new block into JSON and back, ensure the result is the same.
 %% Input contains transaction, output only transaction IDs.
@@ -496,7 +516,7 @@ full_block_roundtrip_test() ->
 	B2 = B#block {txs = [TXBase], tags = ["hello", "world", "example"] },
 	JsonB = jsonify(full_block_to_json_struct(B2)),
 	BRes = json_struct_to_full_block(JsonB),
-	B2 = BRes#block { hash_list = B#block.hash_list }.
+	B2 = BRes#block { block_index = B#block.block_index }.
 
 %% @doc Convert a new TX into JSON and back, ensure the result is the same.
 tx_roundtrip_test() ->
@@ -519,11 +539,11 @@ wallet_list_roundtrip_test() ->
 	JsonWL = jsonify(wallet_list_to_json_struct(WL)),
 	WL = json_struct_to_wallet_list(JsonWL).
 
-hash_list_roundtrip_test() ->
+block_index_roundtrip_test() ->
 	[B] = ar_weave:init(),
 	HL = [B#block.indep_hash, B#block.indep_hash],
-	JsonHL = jsonify(hash_list_to_json_struct(HL)),
-	HL = json_struct_to_hash_list(dejsonify(JsonHL)).
+	JsonHL = jsonify(block_index_to_json_struct(HL)),
+	HL = json_struct_to_block_index(dejsonify(JsonHL)).
 
 query_roundtrip_test() ->
 	Query = {'equals', <<"TestName">>, <<"TestVal">>},

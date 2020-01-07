@@ -57,7 +57,7 @@ height_plus_one_fork_recovery_test() ->
 	ar_test_node:slave_wait_until_height(SlaveNode, 4),
 	timer:sleep(500),
 	%% Expect the master to not recover to height + 1 block with illicit TX.
-	?assertEqual(4, length(ar_node:get_hash_list(MasterNode))),
+	?assertEqual(4, length(ar_node:get_block_index(MasterNode))),
 	%% Mine another block on slave and expect master to recover.
 	ar_test_node:slave_mine(SlaveNode),
 	SlaveBI5 = ar_test_node:slave_wait_until_height(SlaveNode, 5),
@@ -84,7 +84,7 @@ missing_txs_fork_recovery_test() ->
 	ar_test_node:slave_mine(SlaveNode),
 	timer:sleep(1000),
 	%% Expect the local node to reject the block.
-	?assertEqual(1, length(ar_node:get_hash_list(MasterNode))),
+	?assertEqual(1, length(ar_node:get_block_index(MasterNode))),
 	%% Turn off gossip again and add the second TX.
 	ar_test_node:slave_gossip(off, SlaveNode),
 	TX2 = ar_tx:new(),
@@ -132,10 +132,10 @@ recall_block_missing_multiple_txs_fork_recovery_test() ->
 	ar_test_node:slave_mine(SlaveNode),
 	ar_test_node:slave_wait_until_height(SlaveNode, 1),
 	%% Expect it to reject the block since it misses transactions.
-	?assertEqual([B0#block.indep_hash], ar_node:get_hash_list(MasterNode)),
+	?assertEqual([B0#block.indep_hash], ?BI_TO_BHL(ar_node:get_block_index(MasterNode))),
 	%% Mine another one. Its recall block would be either 0 or 1 - both have two txs,
 	%% neither of those txs are known by master.
 	ar_test_node:slave_mine(SlaveNode),
 	FinalBI = ar_test_node:slave_wait_until_height(SlaveNode, 2),
 	%% Expect the master node to recover.
-	ar_test_node:assert_wait_until_block_hash_list(MasterNode, FinalBI).
+	ar_test_node:assert_wait_until_block_block_index(MasterNode, FinalBI).

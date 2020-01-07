@@ -17,9 +17,9 @@
 	parent, % Fork recoveries parent process (initiator)
 	peers, % Lists of the nodes peers to try retrieve blocks
 	target_block, % The target block being recovered too
-	recovery_hash_list, % Complete hash list for this fork
+	recovery_block_index, % Complete hash list for this fork
 	block_list, % List of hashes of verified blocks
-	hash_list, % List of block hashes needing to be verified and applied (lowest to highest)
+	block_index, % List of block hashes needing to be verified and applied (lowest to highest)
 	block_txs_pairs % List of {BH, TXIDs} pairs of the last ?MAX_TX_ANCHOR_DEPTH blocks
 }).
 
@@ -40,7 +40,7 @@ start(Peers, TrustedPeers, TargetBShadow, HashList, Parent, BlockTXPairs) ->
 			% Ensures that the block is within the recovery range and is has
 			% been validly rebuilt from a block shadow.
 			case
-				TargetBShadow#block.height == length(TargetBShadow#block.hash_list)
+				TargetBShadow#block.height == length(TargetBShadow#block.block_index)
 			of
 				true ->
 					PID =
@@ -48,19 +48,19 @@ start(Peers, TrustedPeers, TargetBShadow, HashList, Parent, BlockTXPairs) ->
 							fun() ->
 								TargetB = TargetBShadow,
 								DivergedHashes = drop_until_diverge(
-									lists:reverse(TargetB#block.hash_list),
+									lists:reverse(TargetB#block.block_index),
 									lists:reverse(HashList)
 								) ++ [TargetB#block.indep_hash],
-								BlockList = (TargetB#block.hash_list -- DivergedHashes),
+								BlockList = (TargetB#block.block_index -- DivergedHashes),
 								server(
 									#state {
 										parent = Parent,
 										peers = Peers,
 										block_list = BlockList,
-										hash_list = DivergedHashes,
+										block_index = DivergedHashes,
 										target_block = TargetB,
-										recovery_hash_list =
-											[TargetB#block.indep_hash|TargetB#block.hash_list],
+										recovery_block_index =
+											[TargetB#block.indep_hash|TargetB#block.block_index],
 										block_txs_pairs = get_block_txs_pairs(BlockTXPairs, BlockList, TrustedPeers)
 									}
 								)
@@ -73,7 +73,7 @@ start(Peers, TrustedPeers, TargetBShadow, HashList, Parent, BlockTXPairs) ->
 					ar:warn(
 						[
 							could_not_start_fork_recovery,
-							{reason, target_block_hash_list_incorrect}
+							{reason, target_block_block_index_incorrect}
 						]
 				),
 				undefined
@@ -144,7 +144,7 @@ server(#state {
 server(#state {
 		block_list = BlockList,
 		block_txs_pairs = BlockTXPairs,
-		hash_list = [],
+		block_index = [],
 		parent = Parent
 	}) ->
 	Parent ! {fork_recovered, BlockList, BlockTXPairs};
@@ -175,9 +175,9 @@ server(S = #state { target_block = TargetB }) ->
 do_fork_recover(S = #state {
 		block_list = BlockList,
 		peers = Peers,
-		hash_list = [NextH | HashList],
+		block_index = [{NextH, _} | HashList],
 		target_block = TargetB,
-		recovery_hash_list = BI,
+		recovery_block_index = BI,
 		parent = Parent,
 		block_txs_pairs = BlockTXPairs
 	}) ->
@@ -187,9 +187,9 @@ do_fork_recover(S = #state {
 			[
 				{
 					Block#block.indep_hash,
-					Block#block.weave_size + Block#block.block_size
+					Block#block.weave_size
 				}
-			| Block#block.hash_list],
+			| Block#block.block_index],
 		% If the new retarget blocks hashlist contains the hash of the last
 		% retarget should be recovering to the same fork.
 		NewToVerify =
@@ -225,10 +225,10 @@ do_fork_recover(S = #state {
 					),
 				server(
 					S#state {
-						hash_list = NewToVerify,
+						block_index = NewToVerify,
 						peers = NewPeers,
 						target_block = Block,
-						recovery_hash_list = NewBI
+						recovery_block_index = NewBI
 					}
 				);
 			false ->
@@ -311,10 +311,10 @@ do_fork_recover(S = #state {
 								RecallB = unavailable,
 								TXs = [];
 							true ->
-								BHashList = [B#block.indep_hash|B#block.hash_list],
+								BHashList = [{B#block.indep_hash, B#block.weave_size}|B#block.block_index],
 								case B#block.height of
-									0 -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, NextB#block.hash_list), BI);
-									_ -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, B#block.hash_list), BI)
+									0 -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, NextB#block.block_index), BI);
+									_ -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, B#block.block_index), BI)
 								end,
 								%% TODO: Rewrite validate so it also takes recall block txs
 								TXs = NextB#block.txs
@@ -403,11 +403,11 @@ do_fork_recover(S = #state {
 							S#state {
 								block_list = [NextH | BlockList],
 								block_txs_pairs = NewBlockTXPairs,
-								hash_list = HashList
+								block_index = HashList
 							}
 						)
 				end;
-			true -> server(S#state { hash_list = [] } )
+			true -> server(S#state { block_index = [] } )
 		end;
 	_ -> server(S)
 	end.
@@ -499,7 +499,7 @@ three_block_ahead_recovery_test() ->
 
 block_hashes_by_node(Node) ->
 	BHs = ar_node:get_blocks(Node),
-	Bs = [ar_storage:read_block(BH, ar_node:get_hash_list(Node)) || BH <- BHs],
+	Bs = [ar_storage:read_block(BH, ar_node:get_block_index(Node)) || BH <- BHs],
 	[ar_util:encode(B#block.indep_hash) || B <- Bs].
 
 %% @doc Ensure that nodes on a fork that is far behind will catchup correctly.

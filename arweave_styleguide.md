@@ -20,7 +20,7 @@ Module description comments should be prixed with '%%%' .
 -module(ar_serialize).
 -export([full_block_to_json_struct/1, block_to_json_struct/1, ...]).
 -export([tx_to_json_struct/1, json_struct_to_tx/1]).
--export([wallet_list_to_json_struct/1, hash_list_to_json_struct/1, ...]).
+-export([wallet_list_to_json_struct/1, block_index_to_json_struct/1, ...]).
 -export([jsonify/1, dejsonify/1]).
 -export([query_to_json_struct/1, json_struct_to_query/1]).
 -include("ar.hrl").

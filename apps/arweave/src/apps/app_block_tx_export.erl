@@ -15,7 +15,7 @@ export_blocks([Filename, HeightStart, HeightEnd]) ->
 	export_on_main_node(Filename, HeightStart, HeightEnd, export_blocks).
 
 export_blocks(Filename, {HeightStart, HeightEnd}) ->
-	case get_hash_list(HeightEnd) of
+	case get_block_index(HeightEnd) of
 		{ok, BI} ->
 			Peers = ar_bridge:get_remote_peers(whereis(http_bridge_node)),
 			export_blocks(Filename, {HeightStart, HeightEnd}, BI, take(Peers, 10));
@@ -53,7 +53,7 @@ export_transactions([Filename, HeightStart, HeightEnd]) ->
 	export_on_main_node(Filename, HeightStart, HeightEnd, export_transactions).
 
 export_transactions(Filename, {HeightStart, HeightEnd}) ->
-	case get_hash_list(HeightEnd) of
+	case get_block_index(HeightEnd) of
 		{ok, BI} ->
 			Peers = ar_bridge:get_remote_peers(whereis(http_bridge_node)),
 			export_transactions(Filename, {HeightStart, HeightEnd}, BI, take(Peers, 10));
@@ -116,15 +116,15 @@ export_on_main_node(Filename, HeightStart, HeightEnd, ExportFunction) ->
 			erlang:halt(2)
 	end.
 
-get_hash_list(HeightEnd) ->
+get_block_index(HeightEnd) ->
 	case whereis(http_entrypoint_node) of
 		undefined ->
 			{error, "The node has not started yet"};
 		NodePid ->
-			get_hash_list(HeightEnd, NodePid)
+			get_block_index(HeightEnd, NodePid)
 	end.
 
-get_hash_list(HeightEnd, NodePid) ->
+get_block_index(HeightEnd, NodePid) ->
 	%% Don't allow to export the last 50 blocks in case of fork recovery happens.
 	%% This is mostly to protect us from storing blocks and transactions from
 	%% a previous fork downloaded during the export.
@@ -138,7 +138,7 @@ get_hash_list(HeightEnd, NodePid) ->
 			)),
 			{error, Msg};
 		_ ->
-			{ok, ar_node:get_hash_list(whereis(http_entrypoint_node))}
+			{ok, ar_node:get_block_index(whereis(http_entrypoint_node))}
 	end.
 
 init_csv(Filename, Columns) ->

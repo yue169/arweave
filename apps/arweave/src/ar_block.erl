@@ -3,16 +3,16 @@
 -export([get_recall_block/5]).
 -export([verify_dep_hash/2, verify_indep_hash/1, verify_timestamp/1]).
 -export([verify_height/2, verify_last_retarget/2, verify_previous_block/2]).
--export([verify_block_hash_list/2, verify_wallet_list/4, verify_weave_size/3]).
--export([verify_cumulative_diff/2, verify_block_hash_list_merkle/2]).
+-export([verify_block_block_index/2, verify_wallet_list/4, verify_weave_size/3]).
+-export([verify_cumulative_diff/2, verify_block_block_index_merkle/2]).
 -export([verify_tx_root/1]).
 -export([hash_wallet_list/1]).
 -export([encrypt_block/2, encrypt_block/3]).
 -export([encrypt_full_block/2, encrypt_full_block/3]).
 -export([decrypt_block/4]).
 -export([generate_block_key/2]).
--export([reconstruct_hash_list_from_shadow/2, generate_block_data_segment/6]).
--export([generate_hash_list_for_block/2]).
+-export([reconstruct_block_index_from_shadow/2, generate_block_data_segment/6]).
+-export([generate_block_index_for_block/2]).
 -export([generate_block_data_segment_and_pieces/6, refresh_block_data_segment_timestamp/6]).
 -export([generate_data_tree/1]).
 
@@ -53,19 +53,20 @@ generate_size_tagged_list_from_txs(TXs) ->
 
 %% @doc Find the appropriate block hash list for a block/indep. hash, from a
 %% block hash list further down the weave.
-generate_hash_list_for_block(_Block1IndepHash, []) -> [];
-generate_hash_list_for_block(B, CurrentB) when ?IS_BLOCK(CurrentB) ->
-	generate_hash_list_for_block(B, CurrentB#block.indep_hash);
-generate_hash_list_for_block(B, BHL) when ?IS_BLOCK(B) ->
-	generate_hash_list_for_block(B#block.indep_hash, BHL);
-generate_hash_list_for_block(IndepHash, BHL) ->
-	do_generate_hash_list_for_block(IndepHash, BHL).
+generate_block_index_for_block(_Block0IndepHash, []) -> [];
+generate_block_index_for_block(B, CurrentB) when ?IS_BLOCK(CurrentB) ->
+	generate_block_index_for_block(B, CurrentB#block.indep_hash);
+generate_block_index_for_block(B, BI) when ?IS_BLOCK(B) ->
+	generate_block_index_for_block(B#block.indep_hash, BI);
+generate_block_index_for_block(IndepHash, BI) ->
+	do_generate_block_index_for_block(IndepHash, BI).
 
-do_generate_hash_list_for_block(_, []) ->
-	error(cannot_generate_block_hash_list);
-do_generate_hash_list_for_block(IndepHash, [IndepHash|BHL]) -> BHL;
-do_generate_hash_list_for_block(IndepHash, [_|Rest]) ->
-	do_generate_hash_list_for_block(IndepHash, Rest).
+do_generate_block_index_for_block(_, []) ->
+	error(cannot_generate_block_block_index);
+do_generate_block_index_for_block(IndepHash, [{IndepHash, _}|BI]) -> BI;
+do_generate_block_index_for_block(IndepHash, [IndepHash|BHL]) -> BHL;
+do_generate_block_index_for_block(IndepHash, [_|Rest]) ->
+	do_generate_block_index_for_block(IndepHash, Rest).
 
 %% @doc Encrypt a recall block. Encryption key is derived from
 %% the contents of the recall block and the hash of the current block
@@ -215,7 +216,7 @@ block_to_binary(B) ->
 				)
 			)
 		)/binary,
-		(list_to_binary(B#block.hash_list))/binary,
+		(list_to_binary(B#block.block_index))/binary,
 		(
 			binary:list_to_bin(
 				lists:map(
@@ -355,11 +356,11 @@ generate_block_data_segment_and_pieces(PrecedingB, POA, TXs, RewardAddr, Time, T
 			ar_node_utils:apply_txs(PrecedingB#block.wallet_list, TXs, PrecedingB#block.height),
 			RewardAddr,
 			FinderReward,
-			length(PrecedingB#block.hash_list) - 1
+			length(PrecedingB#block.block_index) - 1
 		),
 	MR =
 		case PrecedingB#block.height >= ?FORK_1_6 of
-			true -> PrecedingB#block.hash_list_merkle;
+			true -> PrecedingB#block.block_index_merkle;
 			false -> <<>>
 		end,
 	Pieces = [
@@ -375,7 +376,7 @@ generate_block_data_segment_and_pieces(PrecedingB, POA, TXs, RewardAddr, Time, T
 			(integer_to_binary(PrecedingB#block.height + 1))/binary,
 			(
 				list_to_binary(
-					[PrecedingB#block.indep_hash | PrecedingB#block.hash_list]
+					[PrecedingB#block.indep_hash | ?BI_TO_BHL(PrecedingB#block.block_index)]
 				)
 			)/binary
 		>>,
@@ -468,7 +469,7 @@ refresh_block_data_segment_timestamp(Pieces, PrecedingB, PrecedingRecallB, TXs, 
 			ar_node_utils:apply_txs(PrecedingB#block.wallet_list, TXs, PrecedingB#block.height),
 			RewardAddr,
 			FinderReward,
-			length(PrecedingB#block.hash_list) - 1
+			length(PrecedingB#block.block_index) - 1
 		),
 	NewPieces = [
 		lists:nth(1, Pieces),
@@ -547,11 +548,11 @@ verify_last_retarget(NewB, OldB) ->
 verify_previous_block(NewB, OldB) ->
 	OldB#block.indep_hash == NewB#block.previous_block.
 
-%% @doc Verify that the new block's hash_list is the current blocks
-%% hash_list + indep_hash, until ?FORK_1_6.
-verify_block_hash_list(NewB, OldB) when NewB#block.height < ?FORK_1_6 ->
-	NewB#block.hash_list == ([OldB#block.indep_hash | OldB#block.hash_list]);
-verify_block_hash_list(_NewB, _OldB) -> true.
+%% @doc Verify that the new block's block_index is the current blocks
+%% block_index + indep_hash, until ?FORK_1_6.
+verify_block_block_index(NewB, OldB) when NewB#block.height < ?FORK_1_6 ->
+	?BI_TO_BHL(NewB#block.block_index) == ([OldB#block.indep_hash | ?BI_TO_BHL(OldB#block.block_index)]);
+verify_block_block_index(_NewB, _OldB) -> true.
 
 %% @doc Verify that the new blocks wallet_list and reward_pool matches that
 %% generated by applying, the block miner reward and mined TXs to the current
@@ -564,7 +565,7 @@ verify_wallet_list(NewB, OldB, RecallB, NewTXs) ->
 			NewB#block.reward_addr,
 			RecallB#block.block_size,
 			NewB#block.weave_size,
-			length(NewB#block.hash_list),
+			length(NewB#block.block_index),
 			NewB#block.diff,
 			NewB#block.timestamp
 		),
@@ -582,7 +583,7 @@ verify_wallet_list(NewB, OldB, RecallB, NewTXs) ->
 			{txs, length(NewTXs)},
 			{recall_block_size, RecallB#block.block_size},
 			{weave_size, NewB#block.weave_size},
-			{length, length(NewB#block.hash_list)}
+			{length, length(NewB#block.block_index)}
 		]
 	),
 	(NewB#block.reward_pool == RewardPool) and
@@ -615,18 +616,18 @@ verify_cumulative_diff(NewB, OldB) ->
 		).
 
 %% @doc After 1.6 fork check that the given merkle root in a new block is valid.
-verify_block_hash_list_merkle(NewB, _CurrentB) when NewB#block.height < ?FORK_1_6 ->
-	NewB#block.hash_list_merkle == <<>>;
-verify_block_hash_list_merkle(NewB, CurrentB) when NewB#block.height == ?FORK_1_6 ->
-	NewB#block.hash_list_merkle ==
-		ar_unbalanced_merkle:block_hash_list_to_merkle_root(CurrentB#block.hash_list);
-verify_block_hash_list_merkle(NewB, CurrentB) ->
-	NewB#block.hash_list_merkle ==
-		ar_unbalanced_merkle:root(CurrentB#block.hash_list_merkle, CurrentB#block.indep_hash).
+verify_block_block_index_merkle(NewB, _CurrentB) when NewB#block.height < ?FORK_1_6 ->
+	NewB#block.block_index_merkle == <<>>;
+verify_block_block_index_merkle(NewB, CurrentB) when NewB#block.height == ?FORK_1_6 ->
+	NewB#block.block_index_merkle ==
+		ar_unbalanced_merkle:block_index_to_merkle_root(CurrentB#block.block_index);
+verify_block_block_index_merkle(NewB, CurrentB) ->
+	NewB#block.block_index_merkle ==
+		ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.indep_hash).
 
 % Block shadow functions
 
-reconstruct_hash_list_from_shadow(ShadowHashList, HashList) ->
+reconstruct_block_index_from_shadow(ShadowHashList, HashList) ->
 	case
 		{
 			ShadowHashList,
@@ -634,10 +635,10 @@ reconstruct_hash_list_from_shadow(ShadowHashList, HashList) ->
 		}
 	of
 		{[], _} ->
-			ar:err([generate_block_from_shadow, generate_hash_list, block_hash_list_empty]),
+			ar:err([generate_block_from_shadow, generate_block_index, block_block_index_empty]),
 			{error, []};
 		{ShadowHashList, []} ->
-			ar:err([generate_block_from_shadow, generate_hash_list, node_hash_list_empty]),
+			ar:err([generate_block_from_shadow, generate_block_index, node_block_index_empty]),
 			{error, ShadowHashList};
 		{ShadowHashList, OldHashList} ->
 			EarliestShadowHash = lists:last(ShadowHashList),
@@ -651,9 +652,9 @@ reconstruct_hash_list_from_shadow(ShadowHashList, HashList) ->
 					OldHashListLastBlocks = lists:sublist(OldHashList, ?STORE_BLOCKS_BEHIND_CURRENT),
 					ar:warn([
 						generate_block_from_shadow,
-						hash_list_no_intersection,
-						{block_hash_list, lists:map(fun ar_util:encode/1, ShadowHashList)},
-						{node_hash_list_last_blocks, lists:map(fun ar_util:encode/1, OldHashListLastBlocks)}
+						block_index_no_intersection,
+						{block_block_index, lists:map(fun ar_util:encode/1, ShadowHashList)},
+						{node_block_index_last_blocks, lists:map(fun ar_util:encode/1, OldHashListLastBlocks)}
 					]),
 					{error, ShadowHashList};
 				NewL ->
@@ -661,14 +662,14 @@ reconstruct_hash_list_from_shadow(ShadowHashList, HashList) ->
 			end
 	end.
 
-get_recall_block(OrigPeer, RecallHash, BHL, Key, Nonce) ->
-	case ar_storage:read_block(RecallHash, BHL) of
+get_recall_block(OrigPeer, RecallHash, BI, Key, Nonce) ->
+	case ar_storage:read_block(RecallHash, BI) of
 		unavailable ->
 			case ar_storage:read_encrypted_block(RecallHash) of
 				unavailable ->
 					ar:report([{downloading_recall_block, ar_util:encode(RecallHash)}]),
 					FullBlock =
-						ar_node_utils:get_full_block(OrigPeer, RecallHash, BHL),
+						ar_node_utils:get_full_block(OrigPeer, RecallHash, BI),
 					case ?IS_BLOCK(FullBlock)  of
 						true ->
 							ar_storage:write_full_block(FullBlock),
@@ -699,7 +700,7 @@ get_recall_block(OrigPeer, RecallHash, BHL, Key, Nonce) ->
 
 %% Tests: ar_block
 
-hash_list_gen_test() ->
+block_index_gen_test() ->
 	ar_storage:clear(),
 	B0s = [B0] = ar_weave:init([]),
 	ar_storage:write_block(B0),
@@ -708,10 +709,10 @@ hash_list_gen_test() ->
 	B2s = [B2|_] = ar_weave:add(B1s, []),
 	ar_storage:write_block(B2),
 	[B3|_] = ar_weave:add(B2s, []),
-	BHL1 = B1#block.hash_list,
-	BHL2 = B2#block.hash_list,
-	BHL1 = generate_hash_list_for_block(B1, B3#block.hash_list),
-	BHL2 = generate_hash_list_for_block(B2#block.indep_hash, B3#block.hash_list).
+	BI1 = B1#block.block_index,
+	BI2 = B2#block.block_index,
+	BI1 = generate_block_index_for_block(B1, B3#block.block_index),
+	BI2 = generate_block_index_for_block(B2#block.indep_hash, B3#block.block_index).
 
 pad_unpad_roundtrip_test() ->
 	Pad = pad_to_length(<<"abcdefghabcdefghabcd">>),

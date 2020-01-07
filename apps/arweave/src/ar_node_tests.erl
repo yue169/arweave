@@ -181,7 +181,7 @@ add_bogus_block_test() ->
 	?assert(ar_util:do_until(
 		fun() ->
 			[RecvdB | _] = ar_node:get_blocks(Node),
-			LastB == ar_storage:read_block(RecvdB, B2#block.hash_list)
+			LastB == ar_storage:read_block(RecvdB, B2#block.block_index)
 		end,
 		500,
 		4000
@@ -221,14 +221,14 @@ add_bogus_block_nonce_test() ->
 	?assert(ar_util:do_until(
 		fun() ->
 			[RecvdB | _] = ar_node:get_blocks(Node),
-			LastB == ar_storage:read_block(RecvdB, (hd(B2))#block.hash_list)
+			LastB == ar_storage:read_block(RecvdB, (hd(B2))#block.block_index)
 		end,
 		500,
 		4000
 	)).
 
 %% @doc Ensure that blocks with bogus hash lists are not accepted by the network.
-add_bogus_hash_list_test() ->
+add_bogus_block_index_test() ->
 	ar_storage:clear(),
 	ar_storage:write_tx(
 		[
@@ -254,15 +254,15 @@ add_bogus_hash_list_test() ->
 			self(),
 			(hd(B2))#block.height,
 			(hd(B2))#block {
-				hash_list =
-					[<<"INCORRECT HASH">> | tl((hd(B2))#block.hash_list)]
+				block_index =
+					[{<<"INCORRECT HASH">>, element(2, (hd(B2))#block.block_index)} | tl((hd(B2))#block.block_index)]
 			},
 			Recall
 		}),
 	?assert(ar_util:do_until(
 		fun() ->
 			[RecvdB | _] = ar_node:get_blocks(Node),
-			LastB == ar_storage:read_block(RecvdB, (hd(B2))#block.hash_list)
+			LastB == ar_storage:read_block(RecvdB, (hd(B2))#block.block_index)
 		end,
 		500,
 		4000
@@ -334,7 +334,7 @@ medium_blockweave_multi_mine_test_() ->
 				B2 = ar_node:get_blocks(ar_util:pick_random(Nodes)),
 				TestDataID1 = TestData1#tx.id,
 				TestDataID2 = TestData2#tx.id,
-				BI = ar_node:get_hash_list(ar_util:pick_random(Nodes)),
+				BI = ar_node:get_block_index(ar_util:pick_random(Nodes)),
 				[TestDataID1] == (hd(ar_storage:read_block(B1, BI)))#block.txs andalso
 				[TestDataID2] == (hd(ar_storage:read_block(B2, BI)))#block.txs
 			end,

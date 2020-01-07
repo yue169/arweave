@@ -6,7 +6,7 @@
 -export([invalidate_block/1, delete_block/1, blocks_on_disk/0, block_exists/1]).
 -export([write_tx/1, read_tx/1]).
 -export([write_wallet_list/1, read_wallet_list/1]).
--export([write_block_hash_list/2, read_block_hash_list/1]).
+-export([write_block_block_index/2, read_block_block_index/1]).
 -export([delete_tx/1, txs_on_disk/0, tx_exists/1]).
 -export([enough_space/1, select_drive/2]).
 -export([calculate_disk_space/0, calculate_used_space/0, start_update_used_space/0]).
@@ -198,7 +198,7 @@ read_block_file(Filename, BI) ->
 	WL = B#block.wallet_list,
 	FinalB =
 		B#block {
-			hash_list = ar_block:generate_hash_list_for_block(B, BI),
+			block_index = ar_block:generate_block_index_for_block(B, BI),
 			wallet_list =
 				case WL of
 					WL when is_list(WL) ->
@@ -337,7 +337,7 @@ write_tx(TX) ->
 %% @doc Read a tx from disk, given a hash.
 read_tx(unavailable) -> unavailable;
 read_tx(TX) when is_record(TX, tx) -> TX;
-read_tx(TXs) when is_list(Txs) ->
+read_tx(TXs) when is_list(TXs) ->
 	lists:map(fun read_tx/1, TXs);
 read_tx(ID) ->
 	case filelib:wildcard(tx_filepath(ID)) of
@@ -361,10 +361,10 @@ read_tx_file(Filename) ->
 	ar_serialize:json_struct_to_tx(Binary).
 
 %% Write a block hash list to disk for retreival later (in emergencies).
-write_block_hash_list(Hash, BI) ->
-	ar:report([{writing_block_hash_list_to_disk, ID = ar_util:encode(Hash)}]),
-	JSON = ar_serialize:jsonify(ar_serialize:hash_list_to_json_struct(BI)),
-	file:write_file(hash_list_filepath(Hash), JSON),
+write_block_block_index(Hash, BI) ->
+	ar:report([{writing_block_block_index_to_disk, ID = ar_util:encode(Hash)}]),
+	JSON = ar_serialize:jsonify(ar_serialize:block_index_to_json_struct(BI)),
+	file:write_file(block_index_filepath(Hash), JSON),
 	ID.
 
 %% Write a block hash list to disk for retreival later (in emergencies).
@@ -375,9 +375,9 @@ write_wallet_list(WalletList) ->
 	ID.
 
 %% @doc Read a list of block hashes from the disk.
-read_block_hash_list(Hash) ->
-	{ok, Binary} = file:read_file(hash_list_filepath(Hash)),
-	ar_serialize:json_struct_to_hash_list(ar_serialize:dejsonify(Binary)).
+read_block_block_index(Hash) ->
+	{ok, Binary} = file:read_file(block_index_filepath(Hash)),
+	ar_serialize:json_struct_to_block_index(ar_serialize:dejsonify(Binary)).
 
 %% @doc Read a given wallet list (by hash) from the disk.
 read_wallet_list(WalletListHash) ->
@@ -508,7 +508,7 @@ tx_filename(TX) when is_record(TX, tx) ->
 tx_filename(TXID) when is_binary(TXID) ->
 	iolist_to_binary([ar_util:encode(TXID), ".json"]).
 
-hash_list_filepath(Hash) when is_binary(Hash) ->
+block_index_filepath(Hash) when is_binary(Hash) ->
 	filepath([?HASH_LIST_DIR, iolist_to_binary([ar_util:encode(Hash), ".json"])]).
 
 wallet_list_filepath(Hash) when is_binary(Hash) ->
@@ -520,15 +520,15 @@ store_and_retrieve_block_test() ->
 	?assertEqual(0, blocks_on_disk()),
 	B0s = [B0] = ar_weave:init([]),
 	ar_storage:write_block(B0),
-	B0 = read_block(B0#block.indep_hash, B0#block.hash_list),
+	B0 = read_block(B0#block.indep_hash, B0#block.block_index),
 	B1s = [B1|_] = ar_weave:add(B0s, []),
 	ar_storage:write_block(B1),
 	[B2|_] = ar_weave:add(B1s, []),
 	ar_storage:write_block(B2),
 	write_block(B1),
 	?assertEqual(3, blocks_on_disk()),
-	B1 = read_block(B1#block.indep_hash, B2#block.hash_list),
-	B1 = read_block(B1#block.height, B2#block.hash_list).
+	B1 = read_block(B1#block.indep_hash, B2#block.block_index),
+	B1 = read_block(B1#block.height, B2#block.block_index).
 
 clear_blocks_test() ->
 	ar_storage:clear(),
@@ -548,7 +548,7 @@ invalidate_block_test() ->
 	write_full_block(B),
 	invalidate_block(B),
 	timer:sleep(500),
-	unavailable = read_block(B#block.indep_hash, B#block.hash_list),
+	unavailable = read_block(B#block.indep_hash, B#block.block_index),
 	TargetFile =
 		lists:flatten(
 			io_lib:format(
@@ -556,19 +556,19 @@ invalidate_block_test() ->
 				[ar_meta_db:get(data_dir) ++ "/" ++ ?BLOCK_DIR, B#block.height, ar_util:encode(B#block.indep_hash)]
 			)
 		),
-	?assertEqual(B, read_block_file(TargetFile, B#block.hash_list)).
+	?assertEqual(B, read_block_file(TargetFile, B#block.block_index)).
 
-store_and_retrieve_block_hash_list_test() ->
+store_and_retrieve_block_block_index_test() ->
 	ID = crypto:strong_rand_bytes(32),
 	B0s = ar_weave:init([]),
 	write_block(hd(B0s)),
 	B1s = ar_weave:add(B0s, []),
 	write_block(hd(B1s)),
 	[B2|_] = ar_weave:add(B1s, []),
-	write_block_hash_list(ID, B2#block.hash_list),
+	write_block_block_index(ID, B2#block.block_index),
 	receive after 500 -> ok end,
-	BI = read_block_hash_list(ID),
-	BI = B2#block.hash_list.
+	BI = read_block_block_index(ID),
+	BI = B2#block.block_index.
 
 store_and_retrieve_wallet_list_test() ->
 	[B0] = ar_weave:init(),
@@ -580,7 +580,7 @@ handle_corrupted_wallet_list_test() ->
 	ar_storage:clear(),
 	[B0] = ar_weave:init([]),
 	ar_storage:write_block(B0),
-	?assertEqual(B0, read_block(B0#block.indep_hash, B0#block.hash_list)),
+	?assertEqual(B0, read_block(B0#block.indep_hash, B0#block.block_index)),
 	WalletListHash = ar_block:hash_wallet_list(B0#block.wallet_list),
 	ok = file:write_file(wallet_list_filepath(WalletListHash), <<>>),
-	?assertEqual(unavailable, read_block(B0#block.indep_hash, B0#block.hash_list)).
+	?assertEqual(unavailable, read_block(B0#block.indep_hash, B0#block.block_index)).

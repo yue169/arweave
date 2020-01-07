@@ -15,7 +15,7 @@ all() ->
 	io:format("Rewriting all blocks (this may take a very long time...)~n"),	
 	rewrite(),
 	io:format("Removing all orphan/invalid blocks...~n"),
-	remove_invalid_blocks(ar_node:get_hash_list(whereis(http_entrypoint_node))),
+	remove_invalid_blocks(ar_node:get_block_index(whereis(http_entrypoint_node))),
 	io:format("Done!~n").	
 
 
@@ -65,7 +65,7 @@ remove_invalid_blocks(HashList) ->
 %% In the case of upgrading a node from 1.1 to 1.5, this dramatically reduces
 %% the size of the weave on disk (and on the wire).
 rewrite() ->
-	rewrite(lists:reverse(ar_node:get_hash_list(whereis(http_entrypoint_node)))).
+	rewrite(lists:reverse(ar_node:get_block_index(whereis(http_entrypoint_node)))).
 rewrite(BI) -> rewrite(BI, BI).
 rewrite([], _BI) -> [];
 rewrite([{H,_}|Rest], BI) ->

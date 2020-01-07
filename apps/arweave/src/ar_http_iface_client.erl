@@ -10,7 +10,7 @@
 -export([get_encrypted_block/2, get_encrypted_full_block/2]).
 -export([get_info/1, get_info/2, get_peers/1, get_peers/2, get_pending_txs/1]).
 -export([get_time/2, get_height/1]).
--export([get_wallet_list/2, get_hash_list/1, get_hash_list/2]).
+-export([get_wallet_list/2, get_block_index/1, get_block_index/2]).
 -export([get_current_block/1, get_current_block/2]).
 
 -include("ar.hrl").
@@ -66,7 +66,7 @@ send_new_block(Peer, NewB, BDS, {RecallIndepHash, RecallSize, Key, Nonce}) ->
 		lists:map(
 			fun ar_util:encode/1,
 			lists:sublist(
-				NewB#block.hash_list,
+				NewB#block.block_index,
 				1,
 				?STORE_BLOCKS_BEHIND_CURRENT
 			)
@@ -75,7 +75,7 @@ send_new_block(Peer, NewB, BDS, {RecallIndepHash, RecallSize, Key, Nonce}) ->
 		ar_serialize:block_to_json_struct(
 			NewB#block { wallet_list = [] }
 		),
-	BlockShadowProps = [{<<"hash_list">>, ShortHashList} | SmallBlockProps],
+	BlockShadowProps = [{<<"block_index">>, ShortHashList} | SmallBlockProps],
 	PostProps = [
 		{<<"new_block">>, {BlockShadowProps}},
 		{<<"recall_block">>, ar_util:encode(RecallIndepHash)},
@@ -115,7 +115,7 @@ add_peer(Peer) ->
 
 %% @doc Get a peers current, top block.
 get_current_block(Peer) ->
-	get_current_block(Peer, get_hash_list(Peer)).
+	get_current_block(Peer, get_block_index(Peer)).
 get_current_block(Peer, BI) ->
 	case get_full_block([Peer], hd(BI), BI) of
 		{_Peer, B} ->
@@ -242,7 +242,7 @@ get_wallet_list(Peer, Hash) ->
 	end.
 
 %% @doc Get a block hash list (by its hash) from the external peer.
-get_hash_list(Peer) ->
+get_block_index(Peer) ->
 	{ok, {{<<"200">>, _}, _, Body, _, _}} =
 		ar_httpc:request(
 			<<"GET">>,
@@ -250,9 +250,9 @@ get_hash_list(Peer) ->
 			"/hash_list",
 			p2p_headers()
 		),
-	ar_serialize:json_struct_to_hash_list(ar_serialize:dejsonify(Body)).
+	ar_serialize:json_struct_to_block_index(ar_serialize:dejsonify(Body)).
 
-get_hash_list(Peer, Hash) ->
+get_block_index(Peer, Hash) ->
 	Response =
 		ar_httpc:request(
 			<<"GET">>,
@@ -262,7 +262,7 @@ get_hash_list(Peer, Hash) ->
 		),
 	case Response of
 		{ok, {{<<"200">>, _}, _, Body, _, _}} ->
-			ar_serialize:dejsonify(ar_serialize:json_struct_to_hash_list(Body));
+			ar_serialize:dejsonify(ar_serialize:json_struct_to_block_index(Body));
 		{ok, {{<<"404">>, _}, _, _, _, _}} -> not_found
 	end.
 
@@ -553,9 +553,9 @@ reconstruct_full_block(Peer, Peers, Body, BI) ->
 						end
 				end,
 			HashList =
-				case B#block.hash_list of
+				case B#block.block_index of
 					unset ->
-						ar_block:generate_hash_list_for_block(B, BI);
+						ar_block:generate_block_index_for_block(B, BI);
 					HL -> HL
 				end,
 			MempoolTXs = ar_node:get_pending_txs(whereis(http_entrypoint_node)),
@@ -563,7 +563,7 @@ reconstruct_full_block(Peer, Peers, Body, BI) ->
 				{{ok, TXs}, MaybeWalletList} when is_list(MaybeWalletList) ->
 					B#block {
 						txs = TXs,
-						hash_list = HashList,
+						block_index = HashList,
 						wallet_list = WalletList
 					};
 				_ ->
@@ -616,7 +616,9 @@ handle_block_field_response1({"height", {ok, {{<<"200">>, _}, _, Body, _, _}}}) 
 handle_block_field_response1({"txs", {ok, {{<<"200">>, _}, _, Body, _, _}}}) ->
 	ar_serialize:json_struct_to_tx(Body);
 handle_block_field_response1({"hash_list", {ok, {{<<"200">>, _}, _, Body, _, _}}}) ->
-	ar_serialize:json_struct_to_hash_list(ar_serialize:dejsonify(Body));
+	ar_serialize:json_struct_to_block_index(ar_serialize:dejsonify(Body));
+handle_block_field_response1({"block_index", {ok, {{<<"200">>, _}, _, Body, _, _}}}) ->
+	ar_serialize:json_struct_to_block_index(ar_serialize:dejsonify(Body));
 handle_block_field_response1({"wallet_list", {ok, {{<<"200">>, _}, _, Body, _, _}}}) ->
 	ar_serialize:json_struct_to_wallet_list(Body);
 handle_block_field_response1({_Subfield, {ok, {{<<"200">>, _}, _, Body, _, _}}}) -> Body;

@@ -6,8 +6,8 @@
 -export([gossip/2, slave_gossip/2, slave_add_tx/2, slave_mine/1]).
 -export([wait_until_height/2, slave_wait_until_height/2]).
 -export([assert_slave_wait_until_height/2]).
--export([wait_until_block_hash_list/2]).
--export([assert_wait_until_block_hash_list/2]).
+-export([wait_until_block_block_index/2]).
+-export([assert_wait_until_block_block_index/2]).
 -export([wait_until_receives_txs/2]).
 -export([assert_wait_until_receives_txs/2]).
 -export([assert_slave_wait_until_receives_txs/2]).
@@ -160,10 +160,10 @@ assert_slave_wait_until_height(Node, TargetHeight) ->
 	?assert(is_list(BI)),
 	BI.
 
-assert_wait_until_block_hash_list(Node, BI) ->
-	?assertEqual(ok, wait_until_block_hash_list(Node, BI)).
+assert_wait_until_block_block_index(Node, BI) ->
+	?assertEqual(ok, wait_until_block_block_index(Node, BI)).
 
-wait_until_block_hash_list(Node, BI) ->
+wait_until_block_block_index(Node, BI) ->
 	ar_util:do_until(
 		fun() ->
 			case ar_node:get_blocks(Node) of
