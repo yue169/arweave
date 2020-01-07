@@ -615,6 +615,12 @@ verify_cumulative_diff(NewB, OldB) ->
 		).
 
 %% @doc After 1.6 fork check that the given merkle root in a new block is valid.
+verify_block_index_merkle(NewB, _CurrentB) when NewB#block.height == ?FORK_2_0 ->
+	[{HeaderHash, _}|_] = ar_transition:generate_checkpoint(),
+	NewB#block.block_index_merkle == HeaderHash;
+verify_block_index_merkle(NewB, CurrentB)when NewB#block.height > ?FORK_2_0 ->
+	NewB#block.block_index_merkle ==
+		ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.header_hash);
 verify_block_index_merkle(NewB, _CurrentB) when NewB#block.height < ?FORK_1_6 ->
 	NewB#block.block_index_merkle == <<>>;
 verify_block_index_merkle(NewB, CurrentB) when NewB#block.height == ?FORK_1_6 ->

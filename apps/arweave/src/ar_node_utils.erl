@@ -497,8 +497,18 @@ integrate_new_block(
 			PID ! {parent_accepted_block, NewB}
 	end,
 	ar_downloader:add_block(NewB),
+	NewBI2 =
+		case NewB#block.height of
+			?FORK_2_0 ->
+				io:format(
+					"!!!CAUTION!!!~n"
+					"Arweave is now transitioning to version 2.0. This may take a significant time.~n"
+					"In the event of an error, please check the Arweave community's communication channels to liasse with your fellow miners.~n"),
+				ar_transition:generate_checkpoint();
+			_ -> NewBI
+		end,
 	reset_miner(StateIn#{
-		block_index       => NewBI,
+		block_index     => NewBI2,
 		current         => NewB#block.indep_hash,
 		txs             => ValidTXs,
 		height          => NewB#block.height,
