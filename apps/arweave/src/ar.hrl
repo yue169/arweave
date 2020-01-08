@@ -294,7 +294,8 @@
 	weave_size = 0, % Current size of the weave in bytes (counts tx data fields).
 	block_size = 0, % The size of the transactions inside this block.
 	cumulative_diff = 0, % The sum of the squared difficulty on the branch.
-	poa = undefined % The access proof used to generate this block.
+	poa = undefined, % The access proof used to generate this block.
+	votables = []
 }).
 
 %% @doc A transaction, as stored in a block.

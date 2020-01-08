@@ -292,7 +292,8 @@ start(
 		webhooks = WebhookConfigs,
 		max_connections = MaxConnections,
 		max_gateway_connections = MaxGatewayConnections,
-		max_option_depth = MaxOptionDepth
+		max_option_depth = MaxOptionDepth,
+		votables = Votables
 	}) ->
 	%% Start the logging system.
 	filelib:ensure_dir(?LOG_DIR ++ "/"),
@@ -438,6 +439,10 @@ start(
 			unclaimed -> "unclaimed";
 			_ -> binary_to_list(ar_util:encode(MiningAddress))
 		end,
+    lists:foreach(
+		fun({Name, Value}) -> ar_meta_db:put({votable, Name}, Value) end,
+		Votables
+	),
 	ar:report_console(
 		[
 			starting_server,
@@ -515,7 +520,7 @@ maybe_node_postfix() ->
 warn_if_single_scheduler() ->
 	case erlang:system_info(schedulers_online) of
 		1 ->
-			console("WARNING: Running only one CPU core / Erlang scheduler may cause issues");
+			console("WARNING: Running only one CPU core / Erlang scheduler may cause issues.");
 		_ ->
 			ok
 	end.
