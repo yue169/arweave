@@ -91,11 +91,16 @@ write_block(RawB) ->
 	WalletID = write_wallet_list(RawB#block.wallet_list),
 	B = RawB#block { wallet_list = WalletID },
 	BlockToWrite = ar_serialize:jsonify(ar_serialize:block_to_json_struct(B)),
-	% TODO: Remove after 2.0 is live.
-	HeaderHashB = B#block { indep_hash = B#block.header_hash },
 	file:write_file(Name = block_filepath(B), BlockToWrite),
-	file:write_file(Name = block_filepath(HeaderHashB), BlockToWrite),
 	ar_block_index:add(B, Name),
+	% TODO: Remove after 2.0 is live.
+	case B#block.header_hash of
+		<<>> -> do_nothing;
+		HeaderHash ->
+			HeaderHashB = B#block { indep_hash = HeaderHash },
+			file:write_file(Name2 = block_filepath(HeaderHashB), BlockToWrite),
+			ar_block_index:add(B, Name2)
+	end,
 	Name.
 -else.
 write_block(Bs) when is_list(Bs) -> lists:foreach(fun write_block/1, Bs);
@@ -114,8 +119,14 @@ write_block(RawB) ->
 			HeaderHashB = B#block { indep_hash = B#block.header_hash },
 			% TODO: Remove after 2.0 is live.
 			file:write_file(Name = block_filepath(B), BlockToWrite),
-			file:write_file(Name = block_filepath(HeaderHashB), BlockToWrite),
 			ar_block_index:add(B, Name),
+			case B#block.header_hash of
+					<<>> -> do_nothing;
+					HeaderHash ->
+						HeaderHashB = B#block { indep_hash = HeaderHash },
+						file:write_file(Name2 = block_filepath(HeaderHashB), BlockToWrite),
+						ar_block_index:add(B, Name2)
+			end,
 			spawn(
 				ar_meta_db,
 				increase,
@@ -526,7 +537,10 @@ store_and_retrieve_block_test() ->
 	?assertEqual(0, blocks_on_disk()),
 	B0s = [B0] = ar_weave:init([]),
 	ar_storage:write_block(B0),
-	B0 = read_block(B0#block.indep_hash, B0#block.block_index),
+	?assertEqual(
+		read_block(B0#block.indep_hash, B0#block.block_index),
+		B0
+	),
 	B1s = [B1|_] = ar_weave:add(B0s, []),
 	ar_storage:write_block(B1),
 	[B2|_] = ar_weave:add(B1s, []),
