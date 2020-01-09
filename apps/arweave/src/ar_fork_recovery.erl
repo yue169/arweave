@@ -18,8 +18,8 @@
 	peers, % Lists of the nodes peers to try retrieve blocks
 	target_block, % The target block being recovered too
 	recovery_block_index, % Complete hash list for this fork
-	block_list, % List of hashes of verified blocks
-	block_index, % List of block hashes needing to be verified and applied (lowest to highest)
+	done, % List of hashes of verified blocks
+	to_go, % List of block hashes needing to be verified and applied (lowest to highest)
 	block_txs_pairs % List of {BH, TXIDs} pairs of the last ?MAX_TX_ANCHOR_DEPTH blocks
 }).
 
@@ -47,21 +47,22 @@ start(Peers, TrustedPeers, TargetBShadow, BI, Parent, BlockTXPairs) ->
 						spawn(
 							fun() ->
 								TargetB = TargetBShadow,
+								TargetIndex = {TargetB#block.indep_hash, TargetB#block.weave_size},
 								DivergedHashes = drop_until_diverge(
 									lists:reverse(TargetB#block.block_index),
 									lists:reverse(BI)
-								) ++ [TargetB#block.indep_hash],
-								BlockList = (TargetB#block.block_index -- DivergedHashes),
+								) ++ [TargetIndex],
+								Done = (TargetB#block.block_index -- DivergedHashes),
 								server(
 									#state {
 										parent = Parent,
 										peers = Peers,
-										block_list = BlockList,
-										block_index = DivergedHashes,
+										done = Done,
+										to_go = DivergedHashes,
 										target_block = TargetB,
 										recovery_block_index =
-											[TargetB#block.indep_hash|TargetB#block.block_index],
-										block_txs_pairs = get_block_txs_pairs(BlockTXPairs, BlockList, TrustedPeers)
+											[TargetIndex|TargetB#block.block_index],
+										block_txs_pairs = get_block_txs_pairs(BlockTXPairs, Done, TrustedPeers)
 									}
 								)
 							end
@@ -142,12 +143,12 @@ server(#state {
 		target_block = _TargetB
 	}, rejoin) -> ok.
 server(#state {
-		block_list = BlockList,
+		done = Done,
 		block_txs_pairs = BlockTXPairs,
-		block_index = [],
+		to_go = [],
 		parent = Parent
 	}) ->
-	Parent ! {fork_recovered, BlockList, BlockTXPairs};
+	Parent ! {fork_recovered, Done, BlockTXPairs};
 server(S = #state { target_block = TargetB }) ->
 	receive
 		{parent_accepted_block, B} ->
@@ -173,11 +174,11 @@ server(S = #state { target_block = TargetB }) ->
 	end.
 
 do_fork_recover(S = #state {
-		block_list = BlockList,
+		done = Done,
 		peers = Peers,
-		block_index = [{NextH, _} | BI],
+		to_go = [{NextH, _} | BI],
 		target_block = TargetB,
-		recovery_block_index = BI,
+		recovery_block_index = RBI,
 		parent = Parent,
 		block_txs_pairs = BlockTXPairs
 	}) ->
@@ -193,12 +194,12 @@ do_fork_recover(S = #state {
 		% If the new retarget blocks block index contains the hash of the last
 		% retarget should be recovering to the same fork.
 		NewToVerify =
-			case lists:member(TargetB#block.indep_hash, NewBI) of
+			case lists:member({TargetB#block.indep_hash, TargetB#block.weave_size}, NewBI) of
 				true ->
 					ar:info([encountered_block_on_same_fork_as_recovery_process]),
 					drop_until_diverge(
 						lists:reverse(NewBI),
-						lists:reverse(BlockList)
+						lists:reverse(Done)
 					);
 				false ->
 					ar:info([encountered_block_on_different_fork_to_recovery_process]),
@@ -225,7 +226,7 @@ do_fork_recover(S = #state {
 					),
 				server(
 					S#state {
-						block_index = NewToVerify,
+						to_go = NewToVerify,
 						peers = NewPeers,
 						target_block = Block,
 						recovery_block_index = NewBI
@@ -242,7 +243,7 @@ do_fork_recover(S = #state {
 				server(S)
 		end;
 	apply_next_block ->
-		NextB = ar_node_utils:get_full_block(Peers, NextH, BI),
+		NextB = ar_node_utils:get_full_block(Peers, NextH, RBI),
 		ar:info(
 			[
 				{applying_fork_recovery, ar_util:encode(NextH)}
@@ -304,7 +305,7 @@ do_fork_recover(S = #state {
 					% Target block is within range and isi attempted to be
 					% recovered to.
 					{_X, _Y} ->
-						B = ar_node:get_block(Peers, NextB#block.previous_block, BI),
+						B = ar_node:get_block(Peers, NextB#block.previous_block, RBI),
 						case ?IS_BLOCK(B) of
 							false ->
 								BBI = unavailable,
@@ -313,8 +314,8 @@ do_fork_recover(S = #state {
 							true ->
 								BBI = [{B#block.indep_hash, B#block.weave_size}|B#block.block_index],
 								case B#block.height of
-									0 -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, NextB#block.block_index), BI);
-									_ -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, B#block.block_index), BI)
+									0 -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, NextB#block.block_index), RBI);
+									_ -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, B#block.block_index), RBI)
 								end,
 								%% TODO: Rewrite validate so it also takes recall block txs
 								TXs = NextB#block.txs
@@ -393,7 +394,7 @@ do_fork_recover(S = #state {
 										{height, NextB#block.height}
 									]
 								),
-								Parent ! {fork_recovered, [ NextH | BlockList], NewBlockTXPairs};
+								Parent ! {fork_recovered, [ {NextH, NextB#block.weave_size} | Done], NewBlockTXPairs};
 							_ -> do_nothing
 						end,
 						self() ! apply_next_block,
@@ -401,13 +402,13 @@ do_fork_recover(S = #state {
 						ar_storage:write_full_block(RecallB),
 						server(
 							S#state {
-								block_list = [NextH | BlockList],
+								done = [ {NextH, NextB#block.weave_size} | Done],
 								block_txs_pairs = NewBlockTXPairs,
-								block_index = BI
+								to_go = BI
 							}
 						)
 				end;
-			true -> server(S#state { block_index = [] } )
+			true -> server(S#state { to_go = [] } )
 		end;
 	_ -> server(S)
 	end.
