@@ -14,7 +14,17 @@ add_block(B) -> add_block(B, whereis(?MODULE)).
 add_block(B, PID) ->
 	add_block(element(1, hd(B#block.block_index)), B#block.block_index, PID).
 add_block(BH, BI, PID) ->
-    PID ! {block, BH, BI}.
+	case PID of
+		undefined ->
+			ar:info(
+				[
+					not_adding_txs_to_downloader,
+					{block, BH}
+				]
+			);
+		_ ->
+			PID ! {block, BH, BI}
+	end.
 
 %% @doc Fills node to capacity based on weave storage limit.
 fill_to_capacity(Peers, BI) ->
