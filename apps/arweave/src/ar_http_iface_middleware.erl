@@ -177,7 +177,7 @@ handle(<<"GET">>, [<<"tx">>, Hash, <<"status">>], Req, _Pid) ->
 						{<<"block_indep_hash">>, EncodedIndepHash}
 					],
 					CurrentBI = ar_node:get_block_index(whereis(http_entrypoint_node)),
-					case lists:member(ar_util:decode(EncodedIndepHash), CurrentBI) of
+					case lists:member(ar_util:decode(EncodedIndepHash), ?BI_TO_BHL(CurrentBI)) of
 						false ->
 							{404, #{}, <<"Not Found.">>, Req};
 						true ->
@@ -337,8 +337,8 @@ handle(<<"POST">>, [<<"unsigned_tx">>], Req, Pid) ->
 					case handle_post_tx(PeerIP, SignedTX) of
 						ok ->
 							{200, #{}, ar_serialize:jsonify({[{<<"id">>, ar_util:encode(SignedTX#tx.id)}]}), Req2};
-						{error_response, {Status, Headers, Body}} ->
-							{Status, Headers, Body, Req2}
+						{error_response, {Status, Headers, ErrBody}} ->
+							{Status, Headers, ErrBody, Req2}
 					end;
 				{error, body_size_too_large} ->
 					{413, #{}, <<"Payload too large">>, Req}
