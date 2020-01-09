@@ -563,7 +563,16 @@ reconstruct_full_block(Peer, Peers, Body, BI) ->
 				case B#block.block_index of
 					unset ->
 						ar:d([{b, B}, {bi, BI}]),
-						ar_block:generate_block_index_for_block(B, BI);
+						XBI =
+							case B#block.block_index of
+								Hs = [H|_] when is_binary(H) ->
+									[ {XH, 0} || XH <- Hs ];
+								_ -> B#block.block_index
+							end,
+						ar_block:generate_block_index_for_block(
+							B#block { block_index = XBI },
+							BI
+						);
 					XBI -> XBI
 				end,
 			MempoolTXs = ar_node:get_pending_txs(whereis(http_entrypoint_node)),
