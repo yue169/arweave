@@ -115,7 +115,7 @@ calculate_reward_pool(
 			calculate_reward_pool_perpetual(
 				OldPool, TXs, RewardAddr, POA, WeaveSize, Height, Diff, Timestamp);
 		_ ->
-			Proportion = calculate_proportion(POA#block.block_size, WeaveSize, Height),
+			Proportion = calculate_proportion(POA, WeaveSize, Height),
 			calculate_reward_pool_original(OldPool, TXs, RewardAddr, Proportion)
 	end.
 
@@ -208,6 +208,8 @@ calculate_proportion(RecallSize, WeaveSize, Height) when (Height == 0)->
 		WeaveSize,
 		1
 	);
+calculate_proportion(RecallB, WeaveSize, Height) when is_record(RecallB, block) ->
+	calculate_proportion(RecallB#block.block_size, WeaveSize, Height);
 calculate_proportion(RecallSize, WeaveSize, Height) when (WeaveSize == 0)->
 	% No data stored in the weave.
 	calculate_proportion(
