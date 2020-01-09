@@ -255,7 +255,7 @@ add_bogus_block_index_test() ->
 			(hd(B2))#block.height,
 			(hd(B2))#block {
 				block_index =
-					[{<<"INCORRECT HASH">>, element(2, (hd(B2))#block.block_index)} | tl((hd(B2))#block.block_index)]
+					[{<<"INCORRECT HASH">>, element(2, hd((hd(B2))#block.block_index))} | tl((hd(B2))#block.block_index)]
 			},
 			Recall
 		}),
