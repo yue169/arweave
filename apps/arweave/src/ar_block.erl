@@ -215,7 +215,7 @@ block_to_binary(B) ->
 				)
 			)
 		)/binary,
-		(list_to_binary(B#block.block_index))/binary,
+		(list_to_binary([ H || {H, _} <- B#block.block_index ]))/binary,
 		(
 			binary:list_to_bin(
 				lists:map(
