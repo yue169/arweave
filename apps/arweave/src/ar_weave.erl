@@ -135,7 +135,6 @@ add([{Hash,_}|Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB
 		Timestamp
 	);
 add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) ->
-	ar:d(CurrentB),
 	NewHeight = CurrentB#block.height + 1,
 	RecallB = ar_node_utils:find_recall_block(BI),
 	TXs = [T#tx.id || T <- RawTXs],
