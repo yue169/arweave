@@ -197,7 +197,7 @@ json_struct_to_block({BlockStruct}) ->
 		hash = ar_util:decode(find_value(<<"hash">>, BlockStruct)),
 		indep_hash = ar_util:decode(find_value(<<"indep_hash">>, BlockStruct)),
 		header_hash =
-			case find_value(<<"indep_hash">>, BlockStruct) of
+			case find_value(<<"header_hash">>, BlockStruct) of
 				undefined -> <<>>;
 				HeaderHash -> ar_util:decode(HeaderHash)
 			end,
@@ -471,10 +471,12 @@ do_json_struct_to_query(Query) ->
 block_index_to_json_struct(BI) ->
 	lists:map(
 		fun({BH, WeaveSize}) ->
-			[
-				{hash, ar_util:encode(BH)},
-				{weave_size, integer_to_binary(WeaveSize)}
-			];
+			{
+				[
+					{<<"hash">>, ar_util:encode(BH)},
+					{<<"weave_size">>, integer_to_binary(WeaveSize)}
+				]
+			};
 		   (BH) -> ar_util:encode(BH)
 		end,
 		BI
@@ -483,9 +485,9 @@ block_index_to_json_struct(BI) ->
 %% @doc Convert a JSON structure into a block index.
 json_struct_to_block_index(JSONStruct) ->
 	lists:map(
-		fun(Hash) when is_list(Hash) ->
+		fun(Hash) when is_binary(Hash) ->
 				ar_util:decode(Hash);
-		   (JSON) ->
+		   ({JSON}) ->
 				Hash = ar_util:decode(find_value(<<"hash">>, JSON)),
 				WeaveSize = binary_to_integer(find_value(<<"weave_size">>, JSON)),
 				{Hash, WeaveSize}
@@ -547,7 +549,7 @@ block_index_roundtrip_test() ->
 	[B] = ar_weave:init(),
 	HL = [B#block.indep_hash, B#block.indep_hash],
 	JsonHL = jsonify(block_index_to_json_struct(HL)),
-	HL = ?BI_TO_BHL(json_struct_to_block_index(dejsonify(JsonHL))),
+	HL = json_struct_to_block_index(dejsonify(JsonHL)),
 	BI = [{B#block.indep_hash, 1}, {B#block.indep_hash, 2}],
 	JsonBI = jsonify(block_index_to_json_struct(BI)),
 	BI = json_struct_to_block_index(dejsonify(JsonBI)).
