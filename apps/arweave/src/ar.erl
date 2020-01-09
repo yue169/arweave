@@ -564,6 +564,7 @@ tests() ->
 	tests(?CORE_TEST_MODS, #config {}).
 
 tests(Mods, Config) when is_list(Mods) ->
+	error_logger:tty(true),
 	case ?DEFAULT_DIFF of
 		X when X > 8 ->
 			ar:report_console(
