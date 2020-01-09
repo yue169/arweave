@@ -15,7 +15,7 @@
 -define(DEFAULT_REQUEST_HEADERS,
 	[
 		{<<"X-Version">>, <<"8">>},
-		{<<"X-Block-Format">>, <<"2">>}
+		{<<"X-Block-Format">>, <<"3">>}
 	]).
 
 -define(CORS_HEADERS,
