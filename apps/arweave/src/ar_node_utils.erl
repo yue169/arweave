@@ -90,6 +90,8 @@ get_full_block_from_remote_peers(Peers, ID, BI) ->
 	end.
 
 %% @doc Search a block list for the next recall block.
+find_recall_block([B|_]) when ?IS_BLOCK(B) ->
+	find_recall_block(B#block.block_index);
 find_recall_block(BI = [{Hash, _}]) ->
 	ar_storage:read_block(Hash, BI);
 find_recall_block(BI) ->

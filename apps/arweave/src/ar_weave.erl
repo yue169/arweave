@@ -93,7 +93,7 @@ add([B|Bs], TXs, BI, RewardAddr) ->
 	add([B|Bs], TXs, BI, RewardAddr, RewardPool, WalletList).
 add(Bs, TXs, BI, RewardAddr, RewardPool, WalletList) ->
 	add(Bs, TXs, BI, RewardAddr, RewardPool, WalletList, []).
-add([Hash|Bs], TXs, BI, RewardAddr, RewardPool, WalletList, Tags) when is_binary(Hash) ->
+add([{Hash,_}|Bs], TXs, BI, RewardAddr, RewardPool, WalletList, Tags) when is_binary(Hash) ->
 	add(
 		[ar_storage:read_block(Hash, BI)|Bs],
 		TXs,
@@ -120,7 +120,7 @@ add(Bs, TXs, BI, RewardAddr, RewardPool, WalletList, Tags) ->
 		Nonce,
 		Timestamp
 	).
-add([Hash|Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) when is_binary(Hash) ->
+add([{Hash,_}|Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) when is_binary(Hash) ->
 	add(
 		[ar_storage:read_block(Hash, BI)|Bs],
 		RawTXs,
@@ -135,6 +135,7 @@ add([Hash|Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB, Di
 		Timestamp
 	);
 add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) ->
+	ar:d(CurrentB),
 	NewHeight = CurrentB#block.height + 1,
 	RecallB = ar_node_utils:find_recall_block(BI),
 	TXs = [T#tx.id || T <- RawTXs],
@@ -220,11 +221,11 @@ generate_block_index([Hash|Bs], N) when is_binary(Hash) ->
 %% @doc Verify a block from a hash list. Hash lists are stored in reverse order
 verify_indep(#block{ height = 0 }, []) -> true;
 verify_indep(B = #block { height = Height }, BI) ->
+	ReversedBI = lists:reverse(BI),
+	{ExpectedIndepHash, _} = lists:nth(Height + 1, ReversedBI),
 	ComputedIndepHash = indep_hash(B),
-	ReversedBI = lists:reverse(BI),
-	BI = B#block.block_index,
-	ReversedBI = lists:reverse(BI),
-	ExpectedIndepHash = lists:nth(Height + 1, ReversedBI),
+	BBI = B#block.block_index,
+	ReversedBBI = lists:reverse(BBI),
 	case ComputedIndepHash of
 		ExpectedIndepHash ->
 			true;
@@ -234,11 +235,11 @@ verify_indep(B = #block { height = Height }, BI) ->
 				{height, Height},
 				{computed_indep_hash, ar_util:encode(ComputedIndepHash)},
 				{expected_indep_hash, ar_util:encode(ExpectedIndepHash)},
-				{block_index_length, length(BI)},
+				{block_index_length, length(BBI)},
 				{block_index_latest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(BI, 10)))},
 				{block_index_eariest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(ReversedBI, 10)))},
-				{block_block_index_latest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(?BI_TO_BHL(lists:sublist(BI, 10))))},
-				{block_block_index_earliest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(?BI_TO_BHL(lists:sublist(ReversedBI, 10))))}
+				{block_bi_latest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(BBI, 10)))},
+				{block_bi_earliest_blocks, lists:map(fun ar_util:encode/1, ?BI_TO_BHL(lists:sublist(ReversedBBI, 10)))}
 			]),
 			false
 	end.
