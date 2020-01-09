@@ -63,19 +63,21 @@ has_tx(Peer, ID) ->
 %% @doc Distribute a newly found block to remote nodes.
 send_new_block(Peer, NewB, BDS, {RecallIndepHash, RecallSize, Key, Nonce}) ->
 	ShortBI =
-		lists:map(
-			fun ar_util:encode/1,
-			lists:sublist(
-				NewB#block.block_index,
-				1,
-				?STORE_BLOCKS_BEHIND_CURRENT
-			)
+		lists:sublist(
+			NewB#block.block_index,
+			1,
+			?STORE_BLOCKS_BEHIND_CURRENT
 		),
 	{SmallBlockProps} =
 		ar_serialize:block_to_json_struct(
 			NewB#block { wallet_list = [] }
 		),
-	BlockShadowProps = [{<<"block_index">>, ShortBI} | SmallBlockProps],
+	BlockShadowProps =
+		[
+			{<<"block_index">>, ar_serialize:block_index_to_json_struct(ShortBI)}
+		|
+			SmallBlockProps
+		],
 	PostProps = [
 		{<<"new_block">>, {BlockShadowProps}},
 		{<<"recall_block">>, ar_util:encode(RecallIndepHash)},
@@ -167,6 +169,8 @@ get_block_subfield(Peer, Height, Subfield) when is_integer(Height) ->
 	).
 
 %% @doc Generate an appropriate URL for a block by its identifier.
+prepare_block_id({ID, _}) ->
+	prepare_block_id(ID);
 prepare_block_id(ID) when is_binary(ID) ->
 	"/block/hash/" ++ binary_to_list(ar_util:encode(ID));
 prepare_block_id(ID) when is_integer(ID) ->
@@ -250,7 +254,10 @@ get_block_index(Peer) ->
 			"/hash_list",
 			p2p_headers()
 		),
-	ar_serialize:json_struct_to_block_index(ar_serialize:dejsonify(Body)).
+	case ar_serialize:json_struct_to_block_index(ar_serialize:dejsonify(Body)) of
+		BI = [{_H, _WS}] -> BI;
+		Hs -> [ {H, 0} || H <- Hs ]
+	end.
 
 get_block_index(Peer, Hash) ->
 	Response =
@@ -552,18 +559,19 @@ reconstruct_full_block(Peer, Peers, Body, BI) ->
 								get_wallet_list(Peer, B#block.indep_hash)
 						end
 				end,
-			BI =
+			BBI =
 				case B#block.block_index of
 					unset ->
+						ar:d([{b, B}, {bi, BI}]),
 						ar_block:generate_block_index_for_block(B, BI);
-					BI -> BI
+					XBI -> XBI
 				end,
 			MempoolTXs = ar_node:get_pending_txs(whereis(http_entrypoint_node)),
 			case {get_txs(Peers, MempoolTXs, B), WalletList} of
 				{{ok, TXs}, MaybeWalletList} when is_list(MaybeWalletList) ->
 					B#block {
 						txs = TXs,
-						block_index = BI,
+						block_index = BBI,
 						wallet_list = WalletList
 					};
 				_ ->

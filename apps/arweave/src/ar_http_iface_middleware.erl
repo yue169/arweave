@@ -599,7 +599,7 @@ handle(<<"GET">>, [<<"block">>, Type, IDBin, Field], Req, _Pid) ->
 handle(<<"GET">>, [<<"block">>, <<"current">>], Req, Pid) ->
 	case ar_node:get_block_index(whereis(http_entrypoint_node)) of
 		[] -> {404, #{}, <<"Block not found.">>, Req};
-		[IndepHash|_] ->
+		[{IndepHash,_}|_] ->
 			handle(<<"GET">>, [<<"block">>, <<"hash">>, ar_util:encode(IndepHash)], Req, Pid)
 	end;
 
