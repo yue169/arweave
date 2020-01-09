@@ -50,7 +50,7 @@ basic_hash_root_generation_test() ->
 	MR0 = test_hash(BH0),
 	MR1 = test_hash(<<MR0/binary, BH1/binary>>),
 	MR2 = test_hash(<<MR1/binary, BH2/binary>>),
-	?assertEqual(MR2, block_index_to_merkle_root([BH2, BH1, BH0])).
+	?assertEqual(MR2, block_index_to_merkle_root([{BH2, 0}, {BH1, 0}, {BH0, 0}])).
 
 test_hash(Bin) -> crypto:hash(?MERKLE_HASH_ALG, Bin).
 
@@ -59,14 +59,15 @@ root_update_test() ->
 	BH1 = crypto:strong_rand_bytes(32),
 	BH2 = crypto:strong_rand_bytes(32),
 	BH3 = crypto:strong_rand_bytes(32),
-	Root = root(
+	Root =
 		root(
-			block_index_to_merkle_root([BH1, BH0]),
-			BH2
+			root(
+				block_index_to_merkle_root([{BH1, 0}, {BH0, 0}]),
+				BH2
+			),
+			BH3
 		),
-		BH3
-	),
 	?assertEqual(
-		block_index_to_merkle_root([BH3, BH2, BH1, BH0]),
+		block_index_to_merkle_root([{BH3, 0}, {BH2, 0}, {BH1, 0}, {BH0, 0}]),
 		Root
 	).
