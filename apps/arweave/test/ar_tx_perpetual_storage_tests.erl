@@ -238,7 +238,7 @@ updates_pool_and_assigns_rewards_correctly_after_burden() ->
 	slave_mine(Slave),
 	BI1 = wait_until_height(Master, 1),
 	B1 = ar_storage:read_block(hd(BI1), BI1),
-	RecallB1 = B0,
+	POA1 = ar_poa:generate(B0),
 	RewardPoolIncrement1 = ar_tx_perpetual_storage:calculate_tx_cost(
 		byte_size(BigChunk),
 		twice_smaller_diff(B1#block.diff),
@@ -252,7 +252,7 @@ updates_pool_and_assigns_rewards_correctly_after_burden() ->
 		B1#block.weave_size,
 		BaseReward1,
 		1,
-		RecallB1#block.block_size
+		POA1
 	),
 	P1 = precision(byte_size(BigChunk), B1),
 	%% The amount taken from the pool is much smaller than the precision,
@@ -270,10 +270,7 @@ updates_pool_and_assigns_rewards_correctly_after_burden() ->
 	slave_mine(Slave),
 	BI2 = wait_until_height(Master, 2),
 	B2 = ar_storage:read_block(hd(BI2), BI2),
-	RecallB2 = ar_storage:read_block(
-		ar_util:get_recall_hash(hd(BI1), 1, BI1),
-		BI1
-	),
+	POA2 = ar_poa:generate(B1),
 	BaseReward2 = ar_inflation:calculate(2),
 	PoolShare2 = get_miner_pool_share(
 		B2#block.diff,
@@ -281,7 +278,7 @@ updates_pool_and_assigns_rewards_correctly_after_burden() ->
 		B2#block.weave_size,
 		BaseReward2,
 		2,
-		RecallB2#block.block_size
+		POA2
 	),
 	Balance2 = get_balance(RewardAddr),
 	assert_almost_equal(Balance1 + BaseReward2 + PoolShare2, Balance2, 0.5).
@@ -316,7 +313,7 @@ assert_reward_bigger_than_burden(Reward, Diff, Height, Timestamp, WeaveSize) ->
 	Burden = erlang:trunc(WeaveSize * Cost / (1024 * 1024 * 1024)),
 	?assert(Reward > Burden).
 
-get_miner_pool_share(Diff, Timestamp, WeaveSize, BaseReward, Height, RecallSize) ->
+get_miner_pool_share(Diff, Timestamp, WeaveSize, BaseReward, Height, POA) ->
 	Cost = ar_tx_perpetual_storage:usd_to_ar(
 		ar_tx_perpetual_storage:get_cost_per_block_at_timestamp(Timestamp),
 		Diff,
@@ -325,4 +322,8 @@ get_miner_pool_share(Diff, Timestamp, WeaveSize, BaseReward, Height, RecallSize)
 	Burden = erlang:trunc(WeaveSize * Cost / (1024 * 1024 * 1024)),
 	AR = Burden - BaseReward,
 	?assert(AR > 0),
-	erlang:trunc(AR * max(1, RecallSize) * Height / WeaveSize).
+	case Height >= ?FORK_2_0 of
+		true -> AR;
+		false ->
+			erlang:trunc(AR * max(1, POA#block.block_size) * Height / WeaveSize)
+	end.

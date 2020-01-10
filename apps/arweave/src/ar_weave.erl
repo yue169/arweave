@@ -71,14 +71,14 @@ add(Bs, TXs, BI) ->
 add(Bs, TXs, BI, unclaimed) ->
 	add(Bs, TXs, BI, <<>>);
 add([B|Bs], TXs, BI, RewardAddr) ->
-	RecallHash = ar_util:get_recall_hash(B, BI),
-	RecallB = ar_storage:read_block(RecallHash, BI),
+	ar_storage:write_block([B|Bs]),
+	POA = ar_poa:generate(B),
 	{FinderReward, RewardPool} =
 		ar_node_utils:calculate_reward_pool(
 			B#block.reward_pool,
 			TXs,
 			RewardAddr,
-			RecallB#block.block_size,
+			POA,
 			B#block.weave_size,
 			B#block.height,
 			B#block.diff,
@@ -104,9 +104,8 @@ add([{Hash,_}|Bs], TXs, BI, RewardAddr, RewardPool, WalletList, Tags) when is_bi
 		Tags
 	);
 add(Bs, TXs, BI, RewardAddr, RewardPool, WalletList, Tags) ->
-	RecallHash = ar_util:get_recall_hash(hd(Bs), BI),
-	RecallB = ar_storage:read_block(RecallHash, BI),
-	{Nonce, Timestamp, Diff} = mine(hd(Bs), RecallB, TXs, RewardAddr, Tags),
+	POA = ar_poa:generate(hd(Bs)),
+	{Nonce, Timestamp, Diff} = mine(hd(Bs), POA, TXs, RewardAddr, Tags),
 	add(
 		Bs,
 		TXs,
@@ -115,7 +114,7 @@ add(Bs, TXs, BI, RewardAddr, RewardPool, WalletList, Tags) ->
 		RewardPool,
 		WalletList,
 		Tags,
-		RecallB,
+		POA,
 		Diff,
 		Nonce,
 		Timestamp
@@ -136,7 +135,6 @@ add([{Hash,_}|Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, Di
 	);
 add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, Diff, Nonce, Timestamp) ->
 	NewHeight = CurrentB#block.height + 1,
-	POA = ar_poa:generate(BI),
 	TXs = [T#tx.id || T <- RawTXs],
 	TXRoot = ar_block:generate_tx_root_for_block(RawTXs),
 	BlockSize = lists:foldl(

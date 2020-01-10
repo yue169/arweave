@@ -198,8 +198,12 @@ add_bogus_block_test() ->
 	Node ! {replace_block_list, BL},
 	Bs = [B2|_] = ar_weave:add(B1, [TX2]),
 	ar_storage:write_block(B2),
-	RecallB = ar_node_utils:find_recall_block(Bs),
-	Recall = {RecallB#block.indep_hash, <<>>, <<>>},
+	POA = ar_poa:generate(hd(Bs)),
+	Recall =
+		case POA of
+			X when is_record(X, poa) -> POA;
+			false -> {POA#block.indep_hash, <<>>, <<>>}
+		end,
 	ar_gossip:send(GS0,
 		{
 			new_block,
@@ -238,8 +242,12 @@ add_bogus_block_nonce_test() ->
 	Node ! {replace_block_list, BL},
 	B2 = ar_weave:add(B1, [TX2]),
 	ar_storage:write_block(hd(B2)),
-	RecallB = ar_node_utils:find_recall_block(B2),
-	Recall = {RecallB#block.indep_hash, mocked_recall_size, <<>>, <<>>},
+	POA = ar_poa:generate(B1),
+	Recall =
+		case POA of
+			X when is_record(X, poa) -> POA;
+			false -> {POA#block.indep_hash, <<>>, <<>>}
+		end,
 	ar_gossip:send(GS0,
 		{new_block,
 			self(),
@@ -277,8 +285,12 @@ add_bogus_block_index_test() ->
 	Node ! {replace_block_list, BL},
 	B2 = ar_weave:add(B1, [TX2]),
 	ar_storage:write_block(hd(B2)),
-	RecallB = ar_node_utils:find_recall_block(B2),
-	Recall = {RecallB#block.indep_hash, mocked_recall_size, <<>>, <<>>},
+	POA = ar_poa:generate(B2),
+	Recall =
+		case POA of
+			X when is_record(X, poa) -> POA;
+			false -> {POA#block.indep_hash, <<>>, <<>>}
+		end,
 	ar_gossip:send(GS0,
 		{new_block,
 			self(),

@@ -423,13 +423,11 @@ randomx_genesis_difficulty() -> ?DEFAULT_DIFF.
 
 %% @doc Test that found nonces abide by the difficulty criteria.
 basic_test() ->
-	B0 = ar_weave:init(),
-	ar_node:start([], B0),
-	B1 = ar_weave:add(B0, []),
-	B = hd(B1),
-	RecallB = hd(B0),
-	start(B, RecallB, [], unclaimed, [], self(), []),
-	assert_mine_output(B, RecallB, []).
+	[B0] = ar_weave:init([]),
+	ar_node:start([], [B0]),
+	[B1|_] = ar_weave:add([B0], []),
+	start(B1, B1#block.poa, [], unclaimed, [], self(), []),
+	assert_mine_output(B1, B1#block.poa, []).
 
 %% @doc Ensure that the block timestamp gets updated regularly while mining.
 timestamp_refresh_test_() ->
@@ -487,14 +485,14 @@ validator_test() ->
 	?assertMatch({valid, _}, validate(BDS, Nonce, 37, HeightPreRandomX)),
 	?assertMatch({invalid, _}, validate(BDS, Nonce, 38, HeightPreRandomX)).
 
-assert_mine_output(B, RecallB, TXs) ->
+assert_mine_output(B, POA, TXs) ->
 	receive
-		{work_complete, BH, MinedTXs, Hash, _POA, MinedDiff, Nonce, Timestamp, _} ->
+		{work_complete, BH, MinedTXs, Hash, POA, MinedDiff, Nonce, Timestamp, _} ->
 			?assertEqual(BH, B#block.indep_hash),
 			?assertEqual(lists:sort(TXs), lists:sort(MinedTXs)),
 			BDS = ar_block:generate_block_data_segment(
 				B,
-				RecallB,
+				POA,
 				TXs,
 				<<>>,
 				Timestamp,

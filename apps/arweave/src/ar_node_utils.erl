@@ -304,7 +304,7 @@ start_mining(#{
 		block_txs_pairs := BlockTXPairs } = StateIn, ForceDiff)
 		when length(BI) >= ?FORK_2_0 ->
 	case ar_poa:generate(BI) of
-		not_available ->
+		unavailable ->
 			ar:info(
 				[
 					not_mining_this_block,
@@ -612,7 +612,7 @@ validate(
 					{pow, ar_mine:validate(BDSHash, Diff, Height)},
 					{wallet_list, validate_wallet_list(WalletList)},
 					{txs, ar_tx:verify_txs(TXs, Diff, Height - 1, OldB#block.wallet_list, Timestamp)},
-					{tx_root, ar_block:verify_tx_root(NewB)},
+					{tx_root, ar_block:verify_tx_root(NewB#block { txs = TXs })},
 					{difficulty, ar_retarget:validate_difficulty(NewB, OldB)},
 					{header_hash, ar_weave:header_hash(NewB) == NewB#block.header_hash},
 					{dependent_hash, ar_block:verify_dep_hash(NewB, BDSHash)},

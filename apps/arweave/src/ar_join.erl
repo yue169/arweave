@@ -227,31 +227,17 @@ get_block_and_trail(Peers, NewB, BehindCurrent, BI, BlockTXPairs) ->
 	),
 	case ?IS_BLOCK(PreviousBlock) of
 		true ->
-			RecallBlock = ar_util:get_recall_hash(PreviousBlock, BI),
 			ar_storage:write_full_block(NewB),
 			TXIDs = [TX#tx.id || TX <- NewB#block.txs],
 			NewBlockTXPairs = BlockTXPairs ++ [{NewB#block.indep_hash, TXIDs}],
-			case ar_node_utils:get_full_block(Peers, RecallBlock, NewB#block.block_index) of
-				unavailable ->
-					ar:info(
-						[
-							could_not_retrieve_joining_recall_block,
-							retrying
-						]
-					),
-					get_block_and_trail(Peers, NewB, BehindCurrent, BI, BlockTXPairs);
-				RecallB ->
-					ar_storage:write_full_block(RecallB),
-					ar:info(
-						[
-							{writing_block, NewB#block.height},
-							{writing_recall_block, RecallB#block.height},
-							{blocks_written, 2 * (?STORE_BLOCKS_BEHIND_CURRENT - (BehindCurrent-1))},
-							{blocks_to_write, 2 * (BehindCurrent-1)}
-						]
-					),
-					get_block_and_trail(Peers, PreviousBlock, BehindCurrent-1, BI, NewBlockTXPairs)
-			end;
+			ar:info(
+				[
+					{writing_block, NewB#block.height},
+					{blocks_written, (?STORE_BLOCKS_BEHIND_CURRENT - (BehindCurrent-1))},
+					{blocks_to_write, (BehindCurrent-1)}
+				]
+			),
+			get_block_and_trail(Peers, PreviousBlock, BehindCurrent-1, BI, NewBlockTXPairs);
 		false ->
 			ar:info(
 				[

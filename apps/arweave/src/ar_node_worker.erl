@@ -459,6 +459,17 @@ generate_block_from_shadow(StateIn, BShadow, Recall, TXs, Peer) ->
 			error
 	end.
 
+generate_block_from_shadow(StateIn, BShadow, POA, TXs, NewBI, _Peer) when is_record(POA, poa) ->
+	{ok,
+		{
+			BShadow#block {
+				block_index = NewBI,
+				wallet_list = generate_wallet_list_from_shadow(StateIn, BShadow, POA, TXs),
+				txs = TXs
+			},
+			POA
+		}
+	}	;
 generate_block_from_shadow(StateIn, BShadow, Recall, TXs, NewBI, Peer) ->
 	#{ block_index := BI } = StateIn,
 	{RecallIndepHash, Key, Nonce} =
@@ -518,7 +529,7 @@ pick_txs(TXIDs, TXs) ->
 		TXIDs
 	).
 
-generate_wallet_list_from_shadow(StateIn, BShadow, RecallB, TXs) ->
+generate_wallet_list_from_shadow(StateIn, BShadow, POA, TXs) ->
 	#{
 		reward_pool := RewardPool,
 		wallet_list := WalletList,
@@ -529,7 +540,7 @@ generate_wallet_list_from_shadow(StateIn, BShadow, RecallB, TXs) ->
 			RewardPool,
 			TXs,
 			BShadow#block.reward_addr,
-			RecallB#block.block_size,
+			POA,
 			BShadow#block.weave_size,
 			BShadow#block.height,
 			BShadow#block.diff,

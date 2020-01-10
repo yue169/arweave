@@ -38,19 +38,19 @@ generate_tx_tree(B, SizeTaggedTXs) ->
 	{Root, Tree} = ar_merkle:generate_tree(SizeTaggedTXs),
 	B#block { tx_tree = Tree, tx_root = Root }.
 
-generate_size_tagged_list_from_txs(TXs) ->
+generate_size_tagged_list_from_txs(TXsizes) ->
 	lists:reverse(
 		element(2,
 			lists:foldl(
 				fun({TXID, Size}, {Pos, List}) ->
 					Start = Pos + Size,
 					{Start, [{TXID, Start}|List]};
-				(TX, {Pos, List}) ->
+				   (TX, {Pos, List}) ->
 					Start = Pos + TX#tx.data_size,
 					{Start, [{TX#tx.id, Start}|List]}
 				end,
 				{0, []},
-				TXs
+				TXsizes
 			)
 		)
 	).
@@ -511,21 +511,20 @@ verify_dep_hash(NewB, BDSHash) ->
 	NewB#block.hash == BDSHash.
 
 verify_tx_root(B) ->
+	ar:d({verifying, B}),
 	ar:d([{got, B#block.tx_root}, {real, generate_tx_root_for_block(B)}]),
 	B#block.tx_root == generate_tx_root_for_block(B).
 
 %% @doc Given a list of TXs in various formats, or a block, generate the
 %% correct TX merkle tree root.
 generate_tx_root_for_block(B) when is_record(B, block) ->
-	generate_tx_root_for_block(B#block.txs);
+	generate_tx_root_for_block(ar:d(B#block.txs));
 generate_tx_root_for_block(TXIDs = [TXID|_]) when is_binary(TXID) ->
 	generate_tx_root_for_block(ar_storage:read_tx(TXIDs));
 generate_tx_root_for_block(TXs = [TX|_]) when is_record(TX, tx) ->
 	generate_tx_root_for_block([ {T#tx.id, T#tx.data_size} || T <- TXs ]);
 generate_tx_root_for_block(TXSizes) ->
 	TXSizePairs = generate_size_tagged_list_from_txs(TXSizes),
-	ar:d({pairs, TXSizePairs}),
-	ar:d({st, erlang:get_stacktrace()}),
 	{Root, _Tree} = ar_merkle:generate_tree(TXSizePairs),
 	Root.
 

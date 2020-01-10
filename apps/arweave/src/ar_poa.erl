@@ -9,6 +9,13 @@
 %%% for a chunk of data received from the network.
 
 %% @doc Generate a POA for the first option that we can.
+generate([B]) when is_record(B, block) ->
+	% Special Genesis test case.
+	generate(B);
+generate(B) when is_record(B, block) ->
+	generate([{B#block.indep_hash, 0}]);
+generate([B|_]) when is_record(B, block) -> generate(B#block.indep_hash);
+generate([]) -> unavailable;
 generate([{Seed, WeaveSize}|_] = BI) ->
 	case length(BI) >= ?FORK_2_0 of
 		true ->
@@ -23,7 +30,7 @@ generate([{Seed, WeaveSize}|_] = BI) ->
 			ar_node_utils:find_recall_block(BI)
 	end.
 
-generate(_, _, _, N, N) -> not_available;
+generate(_, _, _, N, N) -> unavailable;
 generate(Seed, WeaveSize, BI, Option, Limit) ->
 	ChallengeByte = calculate_challenge_byte(Seed, WeaveSize, Option),
 	ChallengeBlock = find_challenge_block(ChallengeByte, BI),
@@ -88,6 +95,7 @@ create_poa_from_data(NoTreeB, NoTreeTX, SizeTaggedTXs, ChallengeByte, Option) ->
 			B#block {
 				txs = [],
 				block_index = [],
+				wallet_list = ar_block:hash_wallet_list(B#block.wallet_list),
 				poa = undefined,
 				tx_tree = []
 			},
