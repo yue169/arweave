@@ -339,14 +339,25 @@ tx_to_json_struct(
 %% @doc Transform proofs of access into/out of JSON format.
 poa_to_json_struct(undefined) -> <<"undefined">>;
 poa_to_json_struct(POA) ->
-	[
+	{[
 		{option, POA#poa.option},
-		{recall_block, block_to_json_struct(POA#poa.recall_block)},
+		{recall_block,
+			block_to_json_struct(
+				(POA#poa.recall_block)#block {
+					poa = undefined,
+					wallet_list =
+						ar_block:hash_wallet_list(
+							(POA#poa.recall_block)#block.wallet_list
+						),
+					block_index = []
+				}
+			)
+		},
 		{tx_path, ar_util:encode(POA#poa.tx_path)},
 		{tx, tx_to_json_struct(POA#poa.tx)},
 		{data_path, ar_util:encode(POA#poa.data_path)},
 		{chunk, ar_util:encode(POA#poa.chunk)}
-	].
+	]}.
 
 json_struct_to_poa(<<"undefined">>) -> undefined;
 json_struct_to_poa(JSONStruct) ->

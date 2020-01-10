@@ -61,7 +61,7 @@ has_tx(Peer, ID) ->
 
 
 %% @doc Distribute a newly found block to remote nodes.
-send_new_block(Peer, NewB, BDS, {RecallIndepHash, RecallSize, Key, Nonce}) ->
+send_new_block(Peer, NewB, BDS, Recall) ->
 	ShortBI =
 		lists:sublist(
 			NewB#block.block_index,
@@ -80,15 +80,21 @@ send_new_block(Peer, NewB, BDS, {RecallIndepHash, RecallSize, Key, Nonce}) ->
 		],
 	PostProps = [
 		{<<"new_block">>, {BlockShadowProps}},
-		{<<"recall_block">>, ar_util:encode(RecallIndepHash)},
-		{<<"recall_size">>, RecallSize},
 		%% Add the P2P port field to be backwards compatible with nodes
 		%% running the old version of the P2P port feature.
 		{<<"port">>, ?DEFAULT_HTTP_IFACE_PORT},
-		{<<"key">>, ar_util:encode(Key)},
-		{<<"nonce">>, ar_util:encode(Nonce)},
 		{<<"block_data_segment">>, ar_util:encode(BDS)}
-	],
+	] ++
+	case Recall of
+		{RecallIndepHash, RecallSize, Key, Nonce} ->
+			[
+				{<<"recall_block">>, ar_util:encode(RecallIndepHash)},
+				{<<"recall_size">>, RecallSize},
+				{<<"key">>, ar_util:encode(Key)},
+				{<<"nonce">>, ar_util:encode(Nonce)}
+			];
+		_POA -> []
+	end,
 	ar_httpc:request(
 		<<"POST">>,
 		Peer,

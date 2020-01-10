@@ -298,13 +298,12 @@ start_mining(#{block_index := not_joined} = StateIn, _) ->
 start_mining(#{
 		node := Node,
 		block_index := BI,
-		weave_size := WeaveSize,
 		txs := TXs,
 		reward_addr := RewardAddr,
 		tags := Tags,
 		block_txs_pairs := BlockTXPairs } = StateIn, ForceDiff)
 		when length(BI) >= ?FORK_2_0 ->
-	case ar_poa:generate(WeaveSize, BI) of
+	case ar_poa:generate(BI) of
 		not_available ->
 			ar:info(
 				[
@@ -316,7 +315,7 @@ start_mining(#{
 		POA ->
 			ar_miner_log:started_hashing(),
 			ar:info([{node_starting_to_mine, Node}]),
-			B = ar_storage:read_block(hd(element(1, hd(BI))), BI),
+			B = ar_storage:read_block(element(1, hd(BI)), BI),
 			case ForceDiff of
 				unforced ->
 					Miner = ar_mine:start(
@@ -624,7 +623,7 @@ validate(
 					{previous_block, ar_block:verify_previous_block(NewB, OldB)},
 					{block_index, ar_block:verify_block_index(NewB, OldB)},
 					{block_index_root, ar_block:verify_block_index_merkle(NewB, OldB)},
-					{wallet_list2, ar_block:verify_wallet_list(NewB, OldB, undefined, TXs)},
+					{wallet_list2, ar_block:verify_wallet_list(NewB, OldB, POA, TXs)},
 					{cumulative_difficulty, ar_block:verify_cumulative_diff(NewB, OldB)}
 				]
 			end

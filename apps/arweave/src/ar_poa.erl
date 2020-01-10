@@ -1,5 +1,5 @@
 -module(ar_poa).
--export([generate/2]).
+-export([generate/1]).
 -export([validate/4]).
 -export([validate_data_root/2, validate_data_tree/2, validate_chunk/3]).
 -include("ar.hrl").
@@ -9,36 +9,54 @@
 %%% for a chunk of data received from the network.
 
 %% @doc Generate a POA for the first option that we can.
-generate(WeaveSize, [{Seed, _}|_] = BI) ->
-	generate(
-		Seed,
-		WeaveSize,
-		BI,
-		1,
-		ar_meta_db:get(max_option_depth)
-	).
+generate([{Seed, WeaveSize}|_] = BI) ->
+	case length(BI) >= ?FORK_2_0 of
+		true ->
+			generate(
+				Seed,
+				WeaveSize,
+				BI,
+				1,
+				ar_meta_db:get(max_option_depth)
+			);
+		false ->
+			ar_node_utils:find_recall_block(BI)
+	end.
 
 generate(_, _, _, N, N) -> not_available;
 generate(Seed, WeaveSize, BI, Option, Limit) ->
 	ChallengeByte = calculate_challenge_byte(Seed, WeaveSize, Option),
 	ChallengeBlock = find_byte_in_size_tagged_list(ChallengeByte, BI),
-	case ar_storage:read_block_without_wl(ChallengeBlock) of
+	case ar_storage:read_block(ChallengeBlock, BI) of
 		unavailable ->
 			generate(Seed, WeaveSize, BI, Option + 1, Limit);
 		B ->
-			TXID =
-				find_byte_in_size_tagged_list(
-					ChallengeByte - B#block.weave_size,
-					B#block.txs
-				),
-			case ar_storage:read_tx(TXID) of
-				unavailable ->
-					generate(Seed, WeaveSize, BI, Option + 1, Limit);
-				NoTreeTX ->
-					create_poa_from_data(B, NoTreeTX, ChallengeByte, Option)
+			case B#block.txs of
+				[] -> create_poa_from_data(B, no_tx, ChallengeByte, Option);
+				_ ->
+					TXID =
+						find_byte_in_size_tagged_list(
+							ChallengeByte - B#block.weave_size,
+							B#block.txs
+						),
+					case ar_storage:read_tx(TXID) of
+						unavailable ->
+							generate(Seed, WeaveSize, BI, Option + 1, Limit);
+						NoTreeTX ->
+							create_poa_from_data(B, NoTreeTX, ChallengeByte, Option)
+					end
 			end
 	end.
 
+create_poa_from_data(B, no_tx, _ChallengeByte, Option) ->
+	#poa {
+		option = Option,
+		recall_block = B,
+		tx_path = <<>>,
+		data_path = <<>>,
+		chunk = <<>>,
+		tx = #tx{} % dummy TX, only used to satisfy serialisation.
+	};
 create_poa_from_data(NoTreeB, NoTreeTX, ChallengeByte, Option) ->
 	B = ar_block:generate_tx_tree(NoTreeB),
 	TX = ar_tx:generate_data_tree(NoTreeTX),
@@ -86,6 +104,7 @@ validate(LastHeaderHash, WeaveSize, BI, POA) ->
 		false -> validate_recall_block(ChallengeByte, ChallengeBlock, POA)
 	end.
 
+calculate_challenge_byte(_, 0, _) -> 0;
 calculate_challenge_byte(LastHeaderHash, WeaveSize, Option) ->
 	binary:decode_unsigned(multihash(LastHeaderHash, Option)) rem WeaveSize.
 
@@ -94,7 +113,7 @@ multihash(X, Remaining) ->
 	multihash(crypto:hash(?HASH_ALG, X), Remaining - 1).
 
 find_byte_in_size_tagged_list(Byte, [{ID, Size}|_])
-		when Size > Byte -> ID;
+		when Size >= Byte -> ID;
 find_byte_in_size_tagged_list(Byte, [_|Rest]) ->
 	find_byte_in_size_tagged_list(Byte, Rest).
 
@@ -103,7 +122,7 @@ calculate_block_height(BH, [_|BI]) ->
 	calculate_block_height(BH, BI).
 
 is_old_poa(ChallengeBlock, BI) ->
-	calculate_block_height(ChallengeBlock, BI) =< ar_fork:height_2_0().
+	calculate_block_height(ChallengeBlock, BI) < ar_fork:height_2_0().
 
 validate_old_poa(_, _) ->
 	error(not_implemented).
@@ -114,6 +133,8 @@ validate_recall_block(ChallengeByte, ChallengeBH, POA) ->
 		_ -> false
 	end.
 
+%% If we have validated the block and the challenge byte is 0, return true.
+validate_tx_path(0, _) -> true;
 validate_tx_path(ChallengeByte, POA) ->
 	BlockOffset = ChallengeByte - (POA#poa.recall_block)#block.weave_size,
 	Validation =

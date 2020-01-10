@@ -268,6 +268,7 @@ server(
 		parent = Parent,
 		miners = Miners,
 		current_block = #block { indep_hash = CurrentBH },
+		poa = POA,
 		total_hashes_tried = TotalHashesTried,
 		started_at = StartedAt
 	}
@@ -289,7 +290,13 @@ server(
 		% Handle a potential solution for the mining puzzle.
 		% Returns the solution back to the node to verify and ends the process.
 		{solution, Hash, Nonce, MinedTXs, MinedDiff, MinedTimestamp} ->
-			Parent ! {work_complete, CurrentBH, MinedTXs, Hash, MinedDiff, Nonce, MinedTimestamp, TotalHashesTried},
+			ar:info(
+				[
+					{miner_found_nonce, self()},
+					{poa, POA}
+				]
+			),
+			Parent ! {work_complete, CurrentBH, MinedTXs, Hash, POA, MinedDiff, Nonce, MinedTimestamp, TotalHashesTried},
 			log_performance(TotalHashesTried, StartedAt),
 			stop_miners(Miners)
 	end.
@@ -482,7 +489,7 @@ validator_test() ->
 
 assert_mine_output(B, RecallB, TXs) ->
 	receive
-		{work_complete, BH, MinedTXs, Hash, MinedDiff, Nonce, Timestamp, _} ->
+		{work_complete, BH, MinedTXs, Hash, _POA, MinedDiff, Nonce, Timestamp, _} ->
 			?assertEqual(BH, B#block.indep_hash),
 			?assertEqual(lists:sort(TXs), lists:sort(MinedTXs)),
 			BDS = ar_block:generate_block_data_segment(

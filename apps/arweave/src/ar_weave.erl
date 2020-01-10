@@ -120,7 +120,7 @@ add(Bs, TXs, BI, RewardAddr, RewardPool, WalletList, Tags) ->
 		Nonce,
 		Timestamp
 	).
-add([{Hash,_}|Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) when is_binary(Hash) ->
+add([{Hash,_}|Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, Diff, Nonce, Timestamp) when is_binary(Hash) ->
 	add(
 		[ar_storage:read_block(Hash, BI)|Bs],
 		RawTXs,
@@ -129,14 +129,14 @@ add([{Hash,_}|Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB
 		RewardPool,
 		WalletList,
 		Tags,
-		RecallB,
+		POA,
 		Diff,
 		Nonce,
 		Timestamp
 	);
-add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, RecallB, Diff, Nonce, Timestamp) ->
+add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, Diff, Nonce, Timestamp) ->
 	NewHeight = CurrentB#block.height + 1,
-	RecallB = ar_node_utils:find_recall_block(BI),
+	POA = ar_poa:generate(BI),
 	TXs = [T#tx.id || T <- RawTXs],
 	BlockSize = lists:foldl(
 			fun(TX, Acc) ->
@@ -159,6 +159,11 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, Recall
 		end,
 	MR =
 		case NewHeight of
+			_ when NewHeight == ?FORK_2_0 ->
+				[{H, _}|_] = ar_transition:generate_checkpoint(CurrentB#block.block_index),
+				H;
+			_ when NewHeight > ?FORK_2_0 ->
+				ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.header_hash);
 			_ when NewHeight < ?FORK_1_6 ->
 				<<>>;
 			_ when NewHeight == ?FORK_1_6 ->
@@ -182,7 +187,7 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, Recall
 			hash = hash(
 				ar_block:generate_block_data_segment(
 					CurrentB,
-					RecallB,
+					POA,
 					RawTXs,
 					RewardAddr,
 					Timestamp,
@@ -192,6 +197,7 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, Recall
 				NewHeight
 			),
 			txs = TXs,
+			tx_root = element(1, ar_merkle:generate_tree(TXs)),
 			block_index = BI,
 			block_index_merkle = MR,
 			wallet_list = WalletList,
@@ -199,9 +205,15 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, Recall
 			tags = Tags,
 			reward_pool = RewardPool,
 			weave_size = CurrentB#block.weave_size + BlockSize,
-			block_size = BlockSize
+			block_size = BlockSize,
+			poa = POA
 		},
-	[NewB#block { indep_hash = indep_hash(NewB) }|BI].
+	[
+		NewB#block {
+			indep_hash = indep_hash(NewB),
+			header_hash = header_hash(NewB)
+		}
+	|BI].
 
 %% @doc Take a complete block list and return a list of block hashes.
 %% Throws an error if the block list is not complete.
@@ -343,13 +355,7 @@ indep_hash(#block {
 %% @doc Create an independent hash from a block. Independent hashes
 %% verify a block's contents in isolation and are stored in a node's hash list.
 header_hash(B) ->
-	WLH =
-		case is_binary(B#block.wallet_list) of
-			false ->
-				ar_block:hash_wallet_list(B#block.wallet_list);
-			true ->
-				B#block.wallet_list
-		end,
+	WLH = ar_block:hash_wallet_list(B#block.wallet_list),
 	ar_deep_hash:hash([
 		B#block.nonce,
 		B#block.previous_block,
@@ -381,7 +387,7 @@ tx_id(TX) -> TX#tx.id.
 mine(B, RecallB, TXs, RewardAddr, Tags) ->
 	ar_mine:start(B, RecallB, TXs, RewardAddr, Tags, self(), []),
 	receive
-		{work_complete, _BH, TXs, _Hash, Diff, Nonce, Timestamp, _} ->
+		{work_complete, _BH, TXs, _Hash, _POA, Diff, Nonce, Timestamp, _} ->
 			{Nonce, Timestamp, Diff}
 	end.
 

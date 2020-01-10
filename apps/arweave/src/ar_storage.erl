@@ -116,10 +116,9 @@ write_block(RawB) ->
 	BlockToWrite = ar_serialize:jsonify(ar_serialize:block_to_json_struct(B)),
 	case enough_space(byte_size(BlockToWrite)) of
 		true ->
-			HeaderHashB = B#block { indep_hash = B#block.header_hash },
-			% TODO: Remove after 2.0 is live.
 			file:write_file(Name = block_filepath(B), BlockToWrite),
 			ar_block_index:add(B, Name),
+			% TODO: Remove after 2.0 is live.
 			case B#block.header_hash of
 					<<>> -> do_nothing;
 					HeaderHash ->
@@ -224,17 +223,8 @@ read_block_file(Filename, BI) ->
 						case read_wallet_list(WL) of
 							{ok, ReadWL} ->
 								ReadWL;
-							{error, Type} ->
-								ar:report(
-									[
-										{
-											error_reading_wallet_list_from_disk,
-											ar_util:encode(B#block.indep_hash)
-										},
-										{type, Type}
-									]
-								),
-								not_found
+							{error, _Type} ->
+								WL
 						end
 				end
 		},

@@ -58,6 +58,8 @@ generate_leaves(Elements) ->
 %% TODO: This implementation leaves some duplicates in the tree structure.
 %% The produced trees could be a little smaller if these duplicates were 
 %% not present, but removing them with `ar_util:unique` takes far too long.
+generate_all_rows([]) ->
+    {<<>>, []};
 generate_all_rows(Leaves) ->
     generate_all_rows(Leaves, Leaves).
 

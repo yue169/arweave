@@ -121,12 +121,12 @@ handle(SPid, {process_new_block, Peer, Height, BShadow, BDS, Recall}) ->
 	GS = maps:get(gossip, StateIn),
 	ar_gossip:send(GS, {new_block, Peer, Height, BShadow, BDS, Recall}),
 	{ok, process_new_block};
-handle(SPid, {work_complete, BH, MinedTXs, Diff, Nonce, Timestamp}) ->
+handle(SPid, {work_complete, BH, POA, MinedTXs, Diff, Nonce, Timestamp}) ->
 	{ok, StateIn} = ar_node_state:all(SPid),
 	#{ block_index := [ {CurrentBH, _ } | _] } = StateIn,
 	case BH of
 		CurrentBH ->
-			case integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) of
+			case integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp, POA) of
 				{ok, StateOut} ->
 					ar_node_state:update(SPid, StateOut);
 				none ->
@@ -571,9 +571,9 @@ maybe_fork_recover_at_height_plus_one(State, NewB, Peer) ->
 	end.
 
 %% @doc Verify a new block found by a miner, integrate it.
-integrate_block_from_miner(#{ block_index := not_joined }, _MinedTXs, _Diff, _Nonce, _Timestamp) ->
+integrate_block_from_miner(#{ block_index := not_joined }, _MinedTXs, _Diff, _Nonce, _Timestamp, _POA) ->
 	none;
-integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
+integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp, POA) ->
 	#{
 		id              := BinID,
 		block_index     := BI,
@@ -588,7 +588,6 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 		block_txs_pairs := BlockTXPairs
 	} = StateIn,
 	% Calculate the new wallet list (applying TXs and mining rewards).
-	RecallB = ar_node_utils:find_recall_block(BI),
 	WeaveSize = OldWeaveSize +
 		lists:foldl(
 			fun(TX, Acc) ->
@@ -602,7 +601,7 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 			OldPool,
 			MinedTXs,
 			RewardAddr,
-			RecallB#block.block_size,
+			POA,
 			WeaveSize,
 			length(BI),
 			Diff,
@@ -616,7 +615,6 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 			{reward_address, RewardAddr},
 			{old_reward_pool, OldPool},
 			{txs, length(MinedTXs)},
-			{recall_block_size, RecallB#block.block_size},
 			{weave_size, WeaveSize},
 			{length, length(BI)}
 		]
@@ -632,14 +630,14 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 	%% Build the block record, verify it, and gossip it to the other nodes.
 	[NextB | _] = ar_weave:add(
 		BI, MinedTXs, BI, RewardAddr, RewardPool,
-		WalletList, Tags, RecallB, Diff, Nonce, Timestamp),
+		WalletList, Tags, POA, Diff, Nonce, Timestamp),
 	B = ar_util:get_head_block(BI),
 	BlockValid = ar_node_utils:validate(
 		StateNew,
 		NextB,
 		MinedTXs,
 		B,
-		RecallB = ar_node_utils:find_recall_block(BI)
+		POA
 	),
 	case BlockValid of
 		{invalid, _} ->
@@ -681,8 +679,6 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 							{node, self()},
 							{accepted_block, NextB#block.height},
 							{indep_hash, ar_util:encode(NextB#block.indep_hash)},
-							{recall_block, RecallB#block.height},
-							{recall_hash, RecallB#block.indep_hash},
 							{txs, length(MinedTXs)},
 							case is_atom(RewardAddr) of
 								true -> {reward_address, unclaimed};
@@ -690,17 +686,11 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp) ->
 							end
 						]
 					),
-					Recall = {
-						RecallB#block.indep_hash,
-						RecallB#block.block_size,
-						<<>>,
-						<<>>
-					},
-					BDS = generate_block_data_segment(NextB, RecallB),
+					BDS = generate_block_data_segment(NextB, POA),
 					{NewGS, _} =
 						ar_gossip:send(
 							GS,
-							{new_block, self(), NextB#block.height, NextB, BDS, Recall}
+							{new_block, self(), NextB#block.height, NextB, BDS, POA}
 						),
 					{ok, ar_node_utils:reset_miner(
 						StateNew#{
@@ -729,10 +719,10 @@ reject_block_from_miner(StateIn, Reason) ->
 
 %% @doc Generates the data segment for the NextB where the RecallB is the recall
 %% block of the previous block to NextB.
-generate_block_data_segment(NextB, RecallB) ->
+generate_block_data_segment(NextB, POA) ->
 	ar_block:generate_block_data_segment(
 		ar_storage:read_block(NextB#block.previous_block, NextB#block.block_index),
-		RecallB,
+		POA,
 		lists:map(fun ar_storage:read_tx/1, NextB#block.txs),
 		NextB#block.reward_addr,
 		NextB#block.timestamp,

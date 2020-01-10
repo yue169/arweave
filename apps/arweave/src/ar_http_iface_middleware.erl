@@ -1019,8 +1019,10 @@ type_to_mf({block, lookup_filename}) ->
 %% @doc Convenience function for lists:keyfind(Key, 1, List).
 %% returns Value not {Key, Value}.
 val_for_key(K, L) ->
-	{K, V} = lists:keyfind(K, 1, L),
-	V.
+	case lists:keyfind(K, 1, L) of
+		false -> false;
+		{K, V} -> V
+	end.
 
 %% @doc Handle multiple steps of POST /block. First argument is a subcommand,
 %% second the argument for that subcommand.
@@ -1143,10 +1145,15 @@ post_block(post_block, {ReqStruct, BShadow, OrigPeer, BDS}, Req) ->
 	%% The ar_block:generate_block_from_shadow/2 call is potentially slow. Since
 	%% all validation steps already passed, we can do the rest in a separate
 	spawn(fun() ->
-		RecallSize = val_for_key(<<"recall_size">>, ReqStruct),
-		RecallIndepHash = ar_util:decode(val_for_key(<<"recall_block">>, ReqStruct)),
-		Key = ar_util:decode(val_for_key(<<"key">>, ReqStruct)),
-		Nonce = ar_util:decode(val_for_key(<<"nonce">>, ReqStruct)),
+		Recall = 
+			case val_for_key(<<"recall_block">>, ReqStruct) of
+				false -> BShadow#block.poa;
+				RecallH ->
+					RecallSize = val_for_key(<<"recall_size">>, ReqStruct),
+					Key = ar_util:decode(val_for_key(<<"key">>, ReqStruct)),
+					Nonce = ar_util:decode(val_for_key(<<"nonce">>, ReqStruct)),
+					{RecallH, RecallSize, Key, Nonce}
+			end,
 		ar:info([{
 			sending_external_block_to_bridge,
 			ar_util:encode(BShadow#block.indep_hash)
@@ -1161,7 +1168,7 @@ post_block(post_block, {ReqStruct, BShadow, OrigPeer, BDS}, Req) ->
 			OrigPeer,
 			BShadow,
 			BDS,
-			{RecallIndepHash, RecallSize, Key, Nonce}
+			Recall
 		)
 	end),
 	{200, #{}, <<"OK">>, Req}.
