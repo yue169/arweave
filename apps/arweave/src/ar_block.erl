@@ -13,6 +13,7 @@
 -export([generate_block_key/2]).
 -export([reconstruct_block_index_from_shadow/2, generate_block_data_segment/6]).
 -export([generate_block_index_for_block/2]).
+-export([generate_tx_root_for_block/1]).
 -export([generate_block_data_segment_and_pieces/6, refresh_block_data_segment_timestamp/6]).
 -export([generate_data_tree/1]).
 
@@ -247,13 +248,13 @@ block_field_size_limit(B) ->
 	end,
 	{ChunkSize, TXPathSize, DataPathSize} =
 		case B#block.poa of
-			undefined -> {0, 0, 0};
-			POA ->
+			POA when is_record(POA, poa) ->
 				{
 					byte_size((B#block.poa)#poa.chunk),
 					byte_size((B#block.poa)#poa.tx_path),
 					byte_size((B#block.poa)#poa.data_path)
-				}
+				};
+			_ -> {0, 0, 0}
 		end,
 	Check = (byte_size(B#block.nonce) =< 512) and
 		(byte_size(B#block.previous_block) =< 48) and
@@ -508,7 +509,19 @@ verify_dep_hash(NewB, BDSHash) ->
 	NewB#block.hash == BDSHash.
 
 verify_tx_root(B) ->
-	B#block.tx_root == element(1, ar_merkle:generate_tree(B#block.txs)).
+	B#block.tx_root == generate_tx_root_for_block(B).
+
+%% @doc Given a list of TXs in various formats, or a block, generate the
+%% correct TX merkle tree root.
+generate_tx_root_for_block(B) when is_record(B, block) ->
+	generate_tx_root_for_block(B#block.txs);
+generate_tx_root_for_block(TXIDs = [TXID|_]) when is_binary(TXID) ->
+	generate_tx_root_for_block(ar_storage:read_tx(TXIDs));
+generate_tx_root_for_block(TXs = [TX|_]) when is_record(TX, tx) ->
+	generate_tx_root_for_block([ {T#tx.id, T#tx.data_size} || T <- TXs ]);
+generate_tx_root_for_block(TXSizePairs) ->
+	{Root, _Tree} = ar_merkle:generate_tree(TXSizePairs),
+	Root.
 
 %% @doc Verify the block timestamp is not too far in the future nor too far in
 %% the past. We calculate the maximum reasonable clock difference between any

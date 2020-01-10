@@ -338,6 +338,7 @@ tx_to_json_struct(
 
 %% @doc Transform proofs of access into/out of JSON format.
 poa_to_json_struct(undefined) -> <<"undefined">>;
+poa_to_json_struct(B) when is_record(B, block) -> <<"undefined">>;
 poa_to_json_struct(POA) ->
 	{[
 		{option, POA#poa.option},

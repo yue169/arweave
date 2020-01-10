@@ -15,11 +15,11 @@
 new() ->
 	#tx { id = generate_id() }.
 new(Data) ->
-	#tx { id = generate_id(), data = Data }.
+	#tx { id = generate_id(), data = Data, data_size = byte_size(Data) }.
 new(Data, Reward) ->
-	#tx { id = generate_id(), data = Data, reward = Reward }.
+	#tx { id = generate_id(), data = Data, reward = Reward, data_size = byte_size(Data) }.
 new(Data, Reward, Last) ->
-	#tx { id = generate_id(), last_tx = Last, data = Data, reward = Reward }.
+	#tx { id = generate_id(), last_tx = Last, data = Data, data_size = byte_size(Data), reward = Reward }.
 new(Dest, Reward, Qty, Last) when bit_size(Dest) == ?HASH_SZ ->
 	#tx {
 		id = generate_id(),
@@ -27,6 +27,7 @@ new(Dest, Reward, Qty, Last) when bit_size(Dest) == ?HASH_SZ ->
 		quantity = Qty,
 		target = Dest,
 		data = <<>>,
+		data_size = 0,
 		reward = Reward
 	};
 new(Dest, Reward, Qty, Last) ->
@@ -81,7 +82,7 @@ signature_data_segment(T) when T#tx.format == 2 ->
 %% After it is signed, it can be placed into a block and verified at a later date.
 sign(TX, {PrivKey, PubKey}) -> sign(TX, PrivKey, PubKey).
 sign(TX, PrivKey, PubKey) ->
-	NewTX = TX#tx{ owner = PubKey },
+	NewTX = TX#tx{ owner = PubKey, data_size = byte_size(TX#tx.data) },
 	Sig = ar_wallet:sign(PrivKey, signature_data_segment(NewTX)),
 	ID = crypto:hash(?HASH_ALG, <<Sig/binary>>),
 	NewTX#tx {

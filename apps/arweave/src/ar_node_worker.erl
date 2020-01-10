@@ -461,16 +461,18 @@ generate_block_from_shadow(StateIn, BShadow, Recall, TXs, Peer) ->
 
 generate_block_from_shadow(StateIn, BShadow, Recall, TXs, NewBI, Peer) ->
 	#{ block_index := BI } = StateIn,
-	{RecallIndepHash, Key, Nonce} = case Recall of
-		no_recall ->
-			{
-				ar_util:get_recall_hash(BShadow#block.previous_block, BShadow#block.height - 1, NewBI),
-				<<>>,
-				<<>>
-			};
-		{RecallH, _, K, N} ->
-			{RecallH, K, N}
-	end,
+	{RecallIndepHash, Key, Nonce} =
+		case Recall of
+			B when is_record(B, block) -> {B#block.indep_hash, <<>>, B#block.nonce};
+			no_recall ->
+				{
+					ar_util:get_recall_hash(BShadow#block.previous_block, BShadow#block.height - 1, NewBI),
+					<<>>,
+					<<>>
+				};
+			{RecallH, _, K, N} ->
+				{RecallH, K, N}
+		end,
 	MaybeRecallB = case ar_block:get_recall_block(Peer, RecallIndepHash, NewBI, Key, Nonce) of
 		unavailable ->
 			RecallHash = ar_util:get_recall_hash(BShadow, BI),

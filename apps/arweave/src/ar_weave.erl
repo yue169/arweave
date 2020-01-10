@@ -138,6 +138,7 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 	NewHeight = CurrentB#block.height + 1,
 	POA = ar_poa:generate(BI),
 	TXs = [T#tx.id || T <- RawTXs],
+	TXRoot = ar_block:generate_tx_root_for_block(RawTXs),
 	BlockSize = lists:foldl(
 			fun(TX, Acc) ->
 				Acc + byte_size(TX#tx.data)
@@ -197,7 +198,7 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 				NewHeight
 			),
 			txs = TXs,
-			tx_root = element(1, ar_merkle:generate_tree(TXs)),
+			tx_root = TXRoot,
 			block_index = BI,
 			block_index_merkle = MR,
 			wallet_list = WalletList,
@@ -206,7 +207,11 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 			reward_pool = RewardPool,
 			weave_size = CurrentB#block.weave_size + BlockSize,
 			block_size = BlockSize,
-			poa = POA
+			poa =
+				case NewHeight >= ?FORK_2_0 of
+					true -> POA;
+					false -> undefined
+				end
 		},
 	[
 		NewB#block {
