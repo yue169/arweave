@@ -13,9 +13,9 @@
 -export([generate_block_key/2]).
 -export([reconstruct_block_index_from_shadow/2, generate_block_data_segment/6]).
 -export([generate_block_index_for_block/2]).
--export([generate_tx_root_for_block/1]).
+-export([generate_tx_root_for_block/1, generate_size_tagged_list_from_txs/1]).
 -export([generate_block_data_segment_and_pieces/6, refresh_block_data_segment_timestamp/6]).
--export([generate_data_tree/1]).
+-export([generate_tx_tree/1, generate_tx_tree/2]).
 
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -32,26 +32,28 @@ hash_wallet_list(WalletList) ->
 	crypto:hash(?HASH_ALG, Bin).
 
 %% @doc Generate the TX tree and set the TX root for a block.
-generate_data_tree(B) ->
-	TXs = generate_size_tagged_list_from_txs(B#block.txs),
-	{Root, Tree} = ar_merkle:generate_tree(TXs),
+generate_tx_tree(B) ->
+	generate_tx_tree(B, generate_size_tagged_list_from_txs(B#block.txs)).
+generate_tx_tree(B, SizeTaggedTXs) ->
+	{Root, Tree} = ar_merkle:generate_tree(SizeTaggedTXs),
 	B#block { tx_tree = Tree, tx_root = Root }.
 
 generate_size_tagged_list_from_txs(TXs) ->
 	lists:reverse(
-		lists:foldl(
-			fun({TXID, Size}, {Pos, List}) ->
-				Start = Pos + Size,
-				{Start, [{TXID, Start}|List]};
-			   (TX, {Pos, List}) ->
-				Start = Pos + TX#tx.data_size,
-				{Start, [{TX#tx.id, Start}|List]}
-			end,
-			{0, []},
-			TXs
+		element(2,
+			lists:foldl(
+				fun({TXID, Size}, {Pos, List}) ->
+					Start = Pos + Size,
+					{Start, [{TXID, Start}|List]};
+				(TX, {Pos, List}) ->
+					Start = Pos + TX#tx.data_size,
+					{Start, [{TX#tx.id, Start}|List]}
+				end,
+				{0, []},
+				TXs
+			)
 		)
 	).
-	
 
 %% @doc Find the appropriate block hash list for a block/indep. hash, from a
 %% block hash list further down the weave.
@@ -509,6 +511,7 @@ verify_dep_hash(NewB, BDSHash) ->
 	NewB#block.hash == BDSHash.
 
 verify_tx_root(B) ->
+	ar:d([{got, B#block.tx_root}, {real, generate_tx_root_for_block(B)}]),
 	B#block.tx_root == generate_tx_root_for_block(B).
 
 %% @doc Given a list of TXs in various formats, or a block, generate the
@@ -519,7 +522,10 @@ generate_tx_root_for_block(TXIDs = [TXID|_]) when is_binary(TXID) ->
 	generate_tx_root_for_block(ar_storage:read_tx(TXIDs));
 generate_tx_root_for_block(TXs = [TX|_]) when is_record(TX, tx) ->
 	generate_tx_root_for_block([ {T#tx.id, T#tx.data_size} || T <- TXs ]);
-generate_tx_root_for_block(TXSizePairs) ->
+generate_tx_root_for_block(TXSizes) ->
+	TXSizePairs = generate_size_tagged_list_from_txs(TXSizes),
+	ar:d({pairs, TXSizePairs}),
+	ar:d({st, erlang:get_stacktrace()}),
 	{Root, _Tree} = ar_merkle:generate_tree(TXSizePairs),
 	Root.
 

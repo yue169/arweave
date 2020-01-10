@@ -31,26 +31,22 @@ generate_tree(Elements) ->
     generate_all_rows(generate_leaves(Elements)).
 
 generate_leaves(Elements) ->
-    {_MaxNote, LeavesRev} =
+    LeavesRev =
         lists:foldl(
-            fun({Data, Note}, {AccNote, Nodes}) ->
-                NewNote = Note + AccNote,
-                Hash = hash([Data, note_to_binary(NewNote)]),
-                {
-                    NewNote,
-                    insert(
-                        #node {
-                            id = Hash,
-                            type = leaf,
-                            data = Data,
-                            note = NewNote,
-                            max = NewNote
-                        },
-                        Nodes
-                    )
-                }
+            fun({Data, Note}, Nodes) ->
+                Hash = hash([Data, note_to_binary(Note)]),
+                insert(
+                    #node {
+                        id = Hash,
+                        type = leaf,
+                        data = Data,
+                        note = Note,
+                        max = Note
+                    },
+                    Nodes
+                )
             end,
-            {0, new()},
+            new(),
             Elements
         ),
     lists:reverse(LeavesRev).
@@ -157,18 +153,34 @@ note_to_binary(Note) ->
 hash(Parts) ->
     crypto:hash(sha256, binary:list_to_bin(Parts)).
 
+%%% Helpers
+
+make_tags_cumulative(L) ->
+    lists:reverse(
+        element(2,
+            lists:foldl(
+                fun({X, Tag}, {AccTag, AccL}) ->
+                    Curr = AccTag + Tag,
+                    {Curr, [{X, Curr}|AccL]}
+                end,
+                {0, []},
+                L
+            )
+        )
+    ).
+
 %%% Tests
 
--define(TEST_SIZE, 1024 * 64).
+-define(TEST_SIZE, 64 * 1024).
 -define(UNEVEN_TEST_SIZE, 35643).
 -define(UNEVEN_TEST_TARGET, 33271).
 
 generate_balanced_tree_test() ->
-    {_MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ]),
+    {_MR, Tree} = ar_merkle:generate_tree(make_tags_cumulative([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ])),
     ?assertEqual(length(Tree), (?TEST_SIZE*2) - 1).
 
 generate_and_validate_balanced_tree_path_test() ->
-    {MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ]),
+    {MR, Tree} = ar_merkle:generate_tree(ar:d(make_tags_cumulative([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ]))),
     RandomTarget = rand:uniform(?TEST_SIZE),
     ?assertEqual(
         RandomTarget,
@@ -181,7 +193,7 @@ generate_and_validate_balanced_tree_path_test() ->
     ).
 
 generate_and_validate_uneven_tree_path_test() ->
-    {MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?UNEVEN_TEST_SIZE) ]),
+    {MR, Tree} = ar_merkle:generate_tree(make_tags_cumulative([ {<<N:256>>, 1} || N <- lists:seq(1, ?UNEVEN_TEST_SIZE) ])),
     % Make sure the target is in the 'uneven' ending of the tree.
     ?assertEqual(
         ?UNEVEN_TEST_TARGET,
@@ -194,7 +206,7 @@ generate_and_validate_uneven_tree_path_test() ->
     ).
 
 reject_invalid_tree_path_test() ->
-    {MR, Tree} = ar_merkle:generate_tree([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ]),
+    {MR, Tree} = ar_merkle:generate_tree(make_tags_cumulative([ {<<N:256>>, 1} || N <- lists:seq(1, ?TEST_SIZE) ])),
     RandomTarget = rand:uniform(?TEST_SIZE),
     ?assertEqual(
         false,

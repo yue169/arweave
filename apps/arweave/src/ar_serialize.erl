@@ -355,18 +355,27 @@ poa_to_json_struct(POA) ->
 			)
 		},
 		{tx_path, ar_util:encode(POA#poa.tx_path)},
-		{tx, tx_to_json_struct(POA#poa.tx)},
+		{tx,
+			case POA#poa.tx of
+				undefined -> <<"undefined">>;
+				TX -> tx_to_json_struct(TX)
+			end
+		},
 		{data_path, ar_util:encode(POA#poa.data_path)},
 		{chunk, ar_util:encode(POA#poa.chunk)}
 	]}.
 
 json_struct_to_poa(<<"undefined">>) -> undefined;
-json_struct_to_poa(JSONStruct) ->
+json_struct_to_poa({JSONStruct}) ->
 	#poa {
 		option = find_value(<<"option">>, JSONStruct),
 		recall_block = json_struct_to_block(find_value(<<"recall_block">>, JSONStruct)),
 		tx_path = ar_util:decode(find_value(<<"tx_path">>, JSONStruct)),
-		tx = json_struct_to_tx(find_value(<<"tx">>, JSONStruct)),
+		tx =
+			case find_value(<<"tx">>, JSONStruct) of
+				<<"undefined">> -> undefined;
+				TXStruct -> json_struct_to_tx(TXStruct)
+			end,
 		data_path = ar_util:decode(find_value(<<"data_path">>, JSONStruct)),
 		chunk = ar_util:decode(find_value(<<"chunk">>, JSONStruct))
 	}.
@@ -386,35 +395,38 @@ json_struct_to_tx({TXStruct}) ->
 		undefined -> [];
 		Xs -> Xs
 	end,
-	BaseTX =
-		#tx {
-			format = 1,
-			id = ar_util:decode(find_value(<<"id">>, TXStruct)),
-			last_tx = ar_util:decode(find_value(<<"last_tx">>, TXStruct)),
-			owner = ar_util:decode(find_value(<<"owner">>, TXStruct)),
-			tags =
-				[
-						{ar_util:decode(Name), ar_util:decode(Value)}
-					||
-						{[{<<"name">>, Name}, {<<"value">>, Value}]} <- Tags
-				],
-			target = ar_util:decode(find_value(<<"target">>, TXStruct)),
-			quantity = binary_to_integer(find_value(<<"quantity">>, TXStruct)),
-			data = ar_util:decode(find_value(<<"data">>, TXStruct)),
-			reward = binary_to_integer(find_value(<<"reward">>, TXStruct)),
-			signature = ar_util:decode(find_value(<<"signature">>, TXStruct))
-		},
-	case find_value(<<"format">>, TXStruct) of
-		undefined -> BaseTX;
-		1 -> BaseTX;
-		2 ->
-			BaseTX#tx {
-				format = 2,
-				data_size = binary_to_integer(find_value(<<"data_size">>, TXStruct)),
-				data_tree = json_struct_to_tree(find_value(<<"data_tree">>, TXStruct)),
-				data_root = ar_util:decode(find_value(<<"data_root">>, TXStruct))
-			}
-	end.
+	#tx {
+		format = 1,
+		id = ar_util:decode(find_value(<<"id">>, TXStruct)),
+		last_tx = ar_util:decode(find_value(<<"last_tx">>, TXStruct)),
+		owner = ar_util:decode(find_value(<<"owner">>, TXStruct)),
+		tags =
+			[
+					{ar_util:decode(Name), ar_util:decode(Value)}
+				||
+					{[{<<"name">>, Name}, {<<"value">>, Value}]} <- Tags
+			],
+		target = ar_util:decode(find_value(<<"target">>, TXStruct)),
+		quantity = binary_to_integer(find_value(<<"quantity">>, TXStruct)),
+		data = ar_util:decode(find_value(<<"data">>, TXStruct)),
+		reward = binary_to_integer(find_value(<<"reward">>, TXStruct)),
+		signature = ar_util:decode(find_value(<<"signature">>, TXStruct)),
+		data_size =
+			case find_value(<<"data_size">>, TXStruct) of
+				undefined -> undefined;
+				X -> binary_to_integer(X)
+			end,
+		data_tree =
+			case find_value(<<"data_tree">>, TXStruct) of
+				undefined -> [];
+				T -> json_struct_to_tree(T)
+			end,
+		data_root =
+			case find_value(<<"data_root">>, TXStruct) of
+				undefined -> undefined;
+				DR -> ar_util:decode(DR)
+			end
+	}.
 
 %% @doc Convert a wallet list into a JSON struct.
 wallet_list_to_json_struct([]) -> [];
@@ -514,7 +526,10 @@ block_roundtrip_test() ->
 	[B] = ar_weave:init(),
 	JSONStruct = jsonify(block_to_json_struct(B)),
 	BRes = json_struct_to_block(JSONStruct),
-	B = BRes#block { block_index = B#block.block_index }.
+	?assertEqual(
+		B,
+		BRes#block { block_index = B#block.block_index }
+	).
 
 %% @doc Convert a new block into JSON and back, ensure the result is the same.
 %% Input contains transaction, output only transaction IDs.
@@ -534,7 +549,10 @@ full_block_roundtrip_test() ->
 	B2 = B#block {txs = [TXBase], tags = ["hello", "world", "example"] },
 	JsonB = jsonify(full_block_to_json_struct(B2)),
 	BRes = json_struct_to_full_block(JsonB),
-	B2 = BRes#block { block_index = B#block.block_index }.
+	?assertEqual(
+		B2,
+		BRes#block { block_index = B#block.block_index }
+	).
 
 %% @doc Convert a new TX into JSON and back, ensure the result is the same.
 tx_roundtrip_test() ->

@@ -210,10 +210,9 @@ reward_pool(S, B) ->
 	reward_pool(S, B, PreviousB).
 
 reward_pool(S, B, PreviousB) ->
-	PreviousRecallBH = ar_util:get_recall_hash(PreviousB, S#state.bi),
-	{ok, PreviousRecallB} = get_block(PreviousRecallBH, S#state.bi, S#state.peers),
+	POA = ar_poa:generate(PreviousB),
 	FullB = full_block(B, S#state.peers),
-	reward_pool1(FullB, PreviousB, PreviousRecallB).
+	reward_pool1(FullB, PreviousB, POA).
 
 reward_pool1(B, PreviousB, PreviousRecallB) ->
 	ar_node_utils:calculate_reward_pool(

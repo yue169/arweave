@@ -51,7 +51,7 @@
 -define(PRIV_KEY_SZ, 4096).
 
 %% @doc NB: Setting the default difficulty high will cause TNT to fail.
--define(DEFAULT_DIFF, 8).
+-define(DEFAULT_DIFF, 2).
 
 -ifndef(TARGET_TIME).
 -define(TARGET_TIME, 120).

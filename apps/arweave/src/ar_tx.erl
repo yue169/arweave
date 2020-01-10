@@ -41,6 +41,7 @@ generate_id() -> crypto:strong_rand_bytes(32).
 
 %% @doc Generate a hashable binary from a #tx object.
 %% NB: This function cannot be used for signature data as the id and signature fields are not set.
+tx_to_binary(undefined) -> <<>>;
 tx_to_binary(T) ->
 	<<
 		(T#tx.id)/binary,
@@ -388,13 +389,16 @@ chunk_binary(ChunkSize, Bin) ->
 generate_size_tagged_list_from_binary(Bin) ->
 	Chunks = chunk_binary(?DATA_CHUNK_SIZE, Bin),
 	lists:reverse(
-		lists:foldl(
-			fun(Chunk, {Pos, List}) ->
-				Start = Pos + byte_size(Chunk),
-				{Start, [{Chunk, Start}|List]}
-			end,
-			{0, []},
-			Chunks
+		element(
+			2,
+			lists:foldl(
+				fun(Chunk, {Pos, List}) ->
+					Start = Pos + byte_size(Chunk),
+					{Start, [{Chunk, Start}|List]}
+				end,
+				{0, []},
+				Chunks
+			)
 		)
 	).
 

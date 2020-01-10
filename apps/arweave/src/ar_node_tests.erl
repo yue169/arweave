@@ -23,6 +23,36 @@ get_height_test() ->
 	timer:sleep(1000),
 	1 = ar_node:get_height(Node1).
 
+%% @doc Ensure that the hieght of the node can be correctly obtained externally.
+%get_height_2_test() ->
+%	ar_storage:clear(),
+%	B0 = ar_weave:init([], ?DEFAULT_DIFF, ?AR(1)),
+%	TX1 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
+%	TX2 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
+%	TX3 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
+%	TX4 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
+%	ar_storage:write_tx(TX1),
+%	ar_storage:write_tx(TX2),
+%	ar_storage:write_tx(TX3),
+%	ar_storage:write_tx(TX4),
+%	Node1 = ar_node:start([self()], B0),
+%	0 = ar_node:get_height(Node1),
+%	ar_node:add_tx(Node1, TX1),
+%	ar_node:add_tx(Node1, TX2),
+%	timer:sleep(10000),
+%	ar_node:mine(Node1),
+%	timer:sleep(5000),
+%	1 = ar_node:get_height(Node1),
+%	ar_node:add_tx(Node1, TX3),
+%	ar_node:add_tx(Node1, TX4),
+%	timer:sleep(10000),
+%	ar_node:mine(Node1),
+%	timer:sleep(5000),
+%	2 = ar_node:get_height(Node1),
+%	ar_node:mine(Node1),
+%	timer:sleep(5000),
+%	3 = ar_node:get_height(Node1).
+
 %% @doc Test retrieval of the current block hash.
 get_current_block_hash_test() ->
 	ar_storage:clear(),
