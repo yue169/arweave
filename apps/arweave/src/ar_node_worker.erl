@@ -339,7 +339,7 @@ maybe_remove_tx(TXs, TXID, Sig) ->
 			if TX#tx.id == TXID ->
 				% Return false (meaning filter it from the list)
 				% for the TX if the sig /does/ verify correctly.
-				case ar:d(ar_wallet:verify(TX#tx.owner, TXID, Sig)) of
+				case ar_wallet:verify(TX#tx.owner, TXID, Sig) of
 					true ->
 						ar:info(
 							[

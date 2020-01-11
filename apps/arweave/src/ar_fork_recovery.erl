@@ -436,13 +436,6 @@ try_apply_block(BI, NextB, TXs, B, POA, BlockTXPairs) ->
 			FinderReward,
 			NextB#block.height
 		),
-	ar:d(
-		[
-			{b, B#block.block_index},
-			{next_b, NextB#block.block_index},
-			{poa, POA}
-		]
-	),
 	BlockValid = ar_node_utils:validate(
 		BI,
 		WalletList,

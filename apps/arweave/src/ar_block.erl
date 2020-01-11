@@ -503,8 +503,6 @@ verify_dep_hash(NewB, BDSHash) ->
 	NewB#block.hash == BDSHash.
 
 verify_tx_root(B) ->
-	ar:d({verifying, B}),
-	ar:d([{got, B#block.tx_root}, {real, generate_tx_root_for_block(B)}]),
 	B#block.tx_root == generate_tx_root_for_block(B).
 
 %% @doc Given a list of TXs in various formats, or a block, generate the
@@ -627,7 +625,6 @@ verify_cumulative_diff(NewB, OldB) ->
 %% @doc After 1.6 fork check that the given merkle root in a new block is valid.
 verify_block_index_merkle(NewB, CurrentB) when NewB#block.height == ?FORK_2_0 ->
 	[{HeaderHash, _}|_] = ar_transition:generate_checkpoint(CurrentB#block.block_index),
-	ar:d({verifying_bi_merkle, NewB#block.block_index_merkle, HeaderHash}),
 	NewB#block.block_index_merkle == HeaderHash;
 verify_block_index_merkle(NewB, CurrentB)when NewB#block.height > ?FORK_2_0 ->
 	NewB#block.block_index_merkle ==

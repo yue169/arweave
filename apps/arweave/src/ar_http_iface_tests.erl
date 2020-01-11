@@ -860,7 +860,6 @@ get_tx_body_test() ->
 	ar_http_iface_server:reregister(http_bridge_node, Bridge),
 	ar_node:add_peers(Node, Bridge),
 	TX = ar_tx:new(<<"TEST DATA">>),
-	ar:d(byte_size(ar_util:encode(TX#tx.id))),
 	% Add tx to network
 	ar_node:add_tx(Node, TX),
 	% Begin mining

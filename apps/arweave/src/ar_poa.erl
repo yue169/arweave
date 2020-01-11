@@ -44,7 +44,6 @@ generate(Seed, WeaveSize, BI, Option, Limit) ->
 				TXIDs ->
 					TXs = ar_storage:read_tx(TXIDs),
 					SizeTaggedTXs = ar_block:generate_size_tagged_list_from_txs(TXs),
-					ar:d(SizeTaggedTXs),
 					TXID =
 						find_byte_in_size_tagged_list(
 							ChallengeByte - B#block.weave_size,

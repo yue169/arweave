@@ -568,7 +568,6 @@ reconstruct_full_block(Peer, Peers, Body, BI) ->
 			BBI =
 				case B#block.block_index of
 					unset ->
-						ar:d([{b, B}, {bi, BI}]),
 						XBI =
 							case B#block.block_index of
 								Hs = [H|_] when is_binary(H) ->
