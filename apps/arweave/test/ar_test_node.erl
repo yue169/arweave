@@ -36,7 +36,7 @@ start(B0, RewardAddr) ->
 	start(B0, {127, 0, 0, 1, slave_call(ar_meta_db, get, [port])}, RewardAddr).
 
 slave_start(no_block) ->
-	[B0] = slave_call(ar_weave, init, []),
+	[B0] = slave_call(ar_weave, init, [[]]),
 	slave_start(B0, unclaimed);
 slave_start(B0) ->
 	slave_start(B0, unclaimed).

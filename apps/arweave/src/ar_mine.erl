@@ -95,6 +95,9 @@ validate(BDSHash, Diff, Height) ->
 max_difficulty() ->
 	erlang:trunc(math:pow(2, 256)).
 
+-ifdef(DEBUG).
+min_difficulty(_Height) -> 1.
+-else.
 min_difficulty(Height) ->
 	Diff = case Height >= ar_fork:height_1_7() of
 		true ->
@@ -108,6 +111,7 @@ min_difficulty(Height) ->
 		false ->
 			Diff
 	end.
+-endif.
 
 genesis_difficulty() ->
 	Diff = case ar_fork:height_1_7() of
