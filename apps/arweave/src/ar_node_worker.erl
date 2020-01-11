@@ -207,6 +207,8 @@ handle(_SPid, Msg) ->
 	{error, {unknown_node_worker_message, Msg}}.
 
 %% @doc Handle the gossip receive results.
+handle_gossip(SPid, {NewGS, {new_block, Peer, _Height, BShadow, Recall}}) ->
+	handle_gossip(SPid, {NewGS, {new_block, Peer, _Height, BShadow, <<>>, Recall}});
 handle_gossip(SPid, {NewGS, {new_block, Peer, _Height, BShadow, _BDS, Recall}}) ->
 	{ok, StateIn} = ar_node_state:all(SPid),
 	case process_new_block(StateIn#{ gossip => NewGS }, BShadow, Recall, Peer) of

@@ -14,7 +14,8 @@ generate([B]) when is_record(B, block) ->
 	generate(B);
 generate(B) when is_record(B, block) ->
 	generate([{B#block.indep_hash, 0}]);
-generate([B|_]) when is_record(B, block) -> generate(B#block.indep_hash);
+generate([B|_]) when is_record(B, block) -> 
+	generate(B);
 generate([]) -> unavailable;
 generate([{Seed, WeaveSize}|_] = BI) ->
 	case length(BI) >= ?FORK_2_0 of

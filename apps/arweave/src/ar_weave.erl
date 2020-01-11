@@ -34,7 +34,7 @@ init(WalletList, StartingDiff, RewardPool) ->
 			timestamp = os:system_time(seconds)
 		},
 	B1 = B0#block { last_retarget = B0#block.timestamp },
-	[B1#block { indep_hash = indep_hash(B1) }].
+	[B1#block { indep_hash = indep_hash(B1), header_hash = header_hash(B1) }].
 -else.
 init() -> init(ar_util:genesis_wallets()).
 init(WalletList) -> init(WalletList, ar_mine:genesis_difficulty()).
@@ -58,7 +58,7 @@ init(WalletList, StartingDiff, RewardPool) ->
 			timestamp = os:system_time(seconds)
 		},
 	B1 = B0#block { last_retarget = B0#block.timestamp },
-	[B1#block { indep_hash = indep_hash(B1) }].
+	[B1#block { indep_hash = indep_hash(B1), header_hash = header_hash(B1) }].
 -endif.
 
 %% @doc Add a new block to the weave, with assiocated TXs and archive data.
