@@ -13,11 +13,12 @@ generate([B]) when is_record(B, block) ->
 	% Special Genesis test case.
 	generate(B);
 generate(B) when is_record(B, block) ->
-	generate([{B#block.indep_hash, 0}]);
+	generate([{B#block.header_hash, 0}]);
 generate([B|_]) when is_record(B, block) -> 
 	generate(B);
 generate([]) -> unavailable;
 generate([{Seed, WeaveSize}|_] = BI) ->
+	ar:d([{generating_poa_for, ar_util:encode(Seed)}]),
 	case length(BI) >= ?FORK_2_0 of
 		true ->
 			generate(
@@ -110,7 +111,9 @@ create_poa_from_data(NoTreeB, NoTreeTX, SizeTaggedTXs, ChallengeByte, Option) ->
 	}.
 
 %% @doc Validate a complete proof of access object.
-validate(LastHeaderHash, WeaveSize, BI, POA) ->
+validate(LastHeaderHash, WeaveSize, BI, RawPOA) ->
+	ar:d({header, [ ar_util:encode(BH) || {BH, _} <- BI ]}),
+	POA = RawPOA#poa { recall_block = ar_storage:read_block(RawPOA#poa.recall_block, BI)}, 
 	ChallengeByte = calculate_challenge_byte(LastHeaderHash, WeaveSize, POA#poa.option),
 	ChallengeBlock = find_challenge_block(ChallengeByte, BI),
 	case is_old_poa(ChallengeBlock, BI) of
@@ -151,7 +154,8 @@ validate_old_poa(_, _) ->
 	error(not_implemented).
 
 validate_recall_block(ChallengeByte, ChallengeBH, POA) ->
-	case ar_weave:indep_hash(POA#poa.recall_block) of
+	ar:d([{poa_validation_rb, ar_util:encode(ar_weave:header_hash(POA#poa.recall_block))}, {challenge, ar_util:encode(ChallengeBH)}]),
+	case ar_weave:header_hash(POA#poa.recall_block) of
 		ChallengeBH -> validate_tx_path(ChallengeByte, POA);
 		_ -> false
 	end.

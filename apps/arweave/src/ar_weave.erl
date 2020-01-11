@@ -33,8 +33,9 @@ init(WalletList, StartingDiff, RewardPool) ->
 			reward_pool = RewardPool,
 			timestamp = os:system_time(seconds)
 		},
-	B1 = B0#block { last_retarget = B0#block.timestamp },
-	[B1#block { indep_hash = indep_hash(B1), header_hash = header_hash(B1) }].
+	B1TS = B0#block { last_retarget = B0#block.timestamp },
+	B1 = B1TS#block { header_hash = header_hash(B1TS) },
+	[B1#block { indep_hash = indep_hash(B1) }].
 -else.
 init() -> init(ar_util:genesis_wallets()).
 init(WalletList) -> init(WalletList, ar_mine:genesis_difficulty()).
@@ -57,8 +58,9 @@ init(WalletList, StartingDiff, RewardPool) ->
 			reward_pool = RewardPool,
 			timestamp = os:system_time(seconds)
 		},
-	B1 = B0#block { last_retarget = B0#block.timestamp },
-	[B1#block { indep_hash = indep_hash(B1), header_hash = header_hash(B1) }].
+	B1TS = B0#block { last_retarget = B0#block.timestamp },
+	B1 = B1TS#block { header_hash = header_hash(B1TS) },
+	[B1#block { indep_hash = indep_hash(B1) }].
 -endif.
 
 %% @doc Add a new block to the weave, with assiocated TXs and archive data.
@@ -211,10 +213,10 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 					false -> undefined
 				end
 		},
+	NewBHH = NewB#block { header_hash = header_hash(NewB)},
 	[
-		NewB#block {
-			indep_hash = indep_hash(NewB),
-			header_hash = header_hash(NewB)
+		NewBHH#block {
+			indep_hash = indep_hash(NewBHH)
 		}
 	|BI].
 
@@ -271,6 +273,8 @@ hash(BDS, Nonce, Height) ->
 
 %% @doc Create an independent hash from a block. Independent hashes
 %% verify a block's contents in isolation and are stored in a node's hash list.
+indep_hash(#block { height = Height, header_hash = HH }) when Height >= ?FORK_2_0 ->
+	HH;
 indep_hash(B = #block { height = Height }) when Height >= ?FORK_1_6 ->
 	ar_deep_hash:hash([
 		B#block.nonce,
@@ -360,13 +364,13 @@ indep_hash(#block {
 header_hash(B) ->
 	WLH = ar_block:hash_wallet_list(B#block.wallet_list),
 	ar_deep_hash:hash([
+		B#block.hash,
 		B#block.nonce,
 		B#block.previous_block,
 		integer_to_binary(B#block.timestamp),
 		integer_to_binary(B#block.last_retarget),
 		integer_to_binary(B#block.diff),
 		integer_to_binary(B#block.height),
-		B#block.hash,
 		B#block.block_index_merkle,
 		B#block.tx_root,
 		WLH,

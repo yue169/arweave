@@ -586,7 +586,7 @@ validate(
 		WalletList,
 		NewB =
 			#block {
-				block_index = BI,
+				block_index = BI = [{LastHeaderHash, LastWeaveSize}|_],
 				wallet_list = WalletList,
 				nonce = Nonce,
 				diff = Diff,
@@ -605,11 +605,20 @@ validate(
 		Nonce,
 		Height
 	),
+	ar:d(
+		[
+			{validating_block, ar_util:encode(NewB#block.indep_hash)},
+			{header_hash, ar_util:encode(NewB#block.header_hash)},
+			{poa, NewB#block.poa},
+			{poa, ar_util:encode(ar_weave:header_hash((NewB#block.poa)#poa.recall_block))}
+		]
+	),
 	{MicroSecs, Results} =
 		timer:tc(
 			fun() ->
 				[
 					{pow, ar_mine:validate(BDSHash, Diff, Height)},
+					{poa, ar_poa:validate(LastHeaderHash, LastWeaveSize, BI, POA)},
 					{wallet_list, validate_wallet_list(WalletList)},
 					{txs, ar_tx:verify_txs(TXs, Diff, Height - 1, OldB#block.wallet_list, Timestamp)},
 					{tx_root, ar_block:verify_tx_root(NewB#block { txs = TXs })},
