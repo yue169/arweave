@@ -387,6 +387,7 @@ read_block_block_index(Hash) ->
 	ar_serialize:json_struct_to_block_index(ar_serialize:dejsonify(Binary)).
 
 %% @doc Read a given wallet list (by hash) from the disk.
+read_wallet_list(WL = [{_, _, _}|_]) -> WL;
 read_wallet_list(WalletListHash) ->
 	Filename = wallet_list_filepath(WalletListHash),
 	case file:read_file(Filename) of

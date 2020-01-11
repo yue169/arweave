@@ -70,8 +70,8 @@ add(Bs, TXs, BI) ->
 	add(Bs, TXs, BI, <<>>).
 add(Bs, TXs, BI, unclaimed) ->
 	add(Bs, TXs, BI, <<>>);
-add([B|Bs], TXs, BI, RewardAddr) ->
-	ar_storage:write_block([B|Bs]),
+add(AllBs = [B|Bs], TXs, BI, RewardAddr) ->
+	ar_storage:write_block([ XB || XB <- AllBs, is_record(XB, block) ]),
 	POA = ar_poa:generate(B),
 	{FinderReward, RewardPool} =
 		ar_node_utils:calculate_reward_pool(

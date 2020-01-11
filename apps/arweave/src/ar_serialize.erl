@@ -213,7 +213,7 @@ json_struct_to_block({BlockStruct}) ->
 		),
 		block_index =
 			case BI of
-				undefined -> unset;
+				undefined -> [];
 				_		  -> json_struct_to_block_index(BI)
 			end,
 		wallet_list =
@@ -396,7 +396,11 @@ json_struct_to_tx({TXStruct}) ->
 		Xs -> Xs
 	end,
 	#tx {
-		format = 1,
+		format =
+			case find_value(<<"format">>, TXStruct) of
+				undefined -> 1;
+				N -> N
+			end,
 		id = ar_util:decode(find_value(<<"id">>, TXStruct)),
 		last_tx = ar_util:decode(find_value(<<"last_tx">>, TXStruct)),
 		owner = ar_util:decode(find_value(<<"owner">>, TXStruct)),

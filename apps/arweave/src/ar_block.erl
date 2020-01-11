@@ -224,7 +224,7 @@ block_to_binary(B) ->
 			binary:list_to_bin(
 				lists:map(
 					fun ar_wallet:to_binary/1,
-					B#block.wallet_list
+					ar_storage:read_wallet_list(B#block.wallet_list)
 				)
 			)
 		)/binary,
@@ -406,15 +406,7 @@ generate_block_data_segment_and_pieces(PrecedingB, POA, TXs, RewardAddr, Time, T
 			(integer_to_binary(RewardPool))/binary
 		>>,
 		case NewHeight >= ?FORK_2_0 of
-			true ->
-				<<
-					(integer_to_binary(POA#poa.option))/binary,
-					(block_to_binary(POA#poa.recall_block))/binary,
-					(POA#poa.tx_path)/binary,
-					(ar_tx:tx_to_binary(POA#poa.tx))/binary,
-					(POA#poa.data_path)/binary,
-					(POA#poa.chunk)/binary
-				>>;
+			true ->	<<>>;
 			false ->
 				<<
 					(block_to_binary(POA))/binary,

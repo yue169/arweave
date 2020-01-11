@@ -260,7 +260,7 @@ do_fork_recover(S = #state {
 				),
 				BBI = unavailable,
 				B = unavailable,
-				RecallB = unavailable,
+				POA = unavailable,
 				TXs = [];
 			% next block retrieved, applying block
 			true ->
@@ -286,7 +286,7 @@ do_fork_recover(S = #state {
 						),
 						BBI = unavailable,
 						B = unavailable,
-						RecallB = unavailable,
+						POA = unavailable,
 						TXs = [],
 						server(S, rejoin);
 					% Target block is too far ahead and cannot be recovered.
@@ -299,24 +299,25 @@ do_fork_recover(S = #state {
 						),
 						BBI = unavailable,
 						B = unavailable,
-						RecallB = unavailable,
+						POA = unavailable,
 						TXs = [],
 						server(S, rejoin);
-					% Target block is within range and isi attempted to be
+					% Target block is within range and is attempted to be
 					% recovered to.
 					{_X, _Y} ->
 						B = ar_node:get_block(Peers, NextB#block.previous_block, RBI),
 						case ?IS_BLOCK(B) of
 							false ->
 								BBI = unavailable,
-								RecallB = unavailable,
+								POA = unavailable,
 								TXs = [];
 							true ->
 								BBI = [{B#block.indep_hash, B#block.weave_size}|B#block.block_index],
-								case B#block.height of
-									0 -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, NextB#block.block_index), RBI);
-									_ -> RecallB = ar_node_utils:get_full_block(Peers, ar_util:get_recall_hash(B, B#block.block_index), RBI)
-								end,
+								POA =
+									case B#block.poa of
+										undefined -> ar_poa:generate(B);
+										X -> X
+									end,
 								%% TODO: Rewrite validate so it also takes recall block txs
 								TXs = NextB#block.txs
 						end
@@ -327,16 +328,18 @@ do_fork_recover(S = #state {
 		case
 			(not ?IS_BLOCK(NextB)) or
 			(not ?IS_BLOCK(B)) or
-			(not ?IS_BLOCK(RecallB))
+			(not is_record(POA, poa))
 		of
 			false ->
 				case
 					try_apply_block(
 						BBI,
-						NextB#block {txs = [T#tx.id || T <- NextB#block.txs]},
+						NextB#block {
+							txs = [T#tx.id || T <- NextB#block.txs]
+						},
 						TXs,
 						B,
-						RecallB,
+						POA,
 						BlockTXPairs
 					)
 				of
@@ -346,7 +349,7 @@ do_fork_recover(S = #state {
 								could_not_validate_fork_block,
 								{next_block, ?IS_BLOCK(NextB)},
 								{block, ?IS_BLOCK(B)},
-								{recall_block, ?IS_BLOCK(RecallB)}
+								{poa, POA}
 							]
 						);
 					{error, tx_replay} ->
@@ -399,7 +402,6 @@ do_fork_recover(S = #state {
 						end,
 						self() ! apply_next_block,
 						ar_storage:write_full_block(NextB),
-						ar_storage:write_full_block(RecallB),
 						server(
 							S#state {
 								done = [ {NextH, NextB#block.weave_size} | Done],
@@ -415,13 +417,13 @@ do_fork_recover(S = #state {
 
 %% @doc Try and apply a new block (NextB) to the current block (B).
 %% Returns	true if the block can be applied, otherwise false.
-try_apply_block(BI, NextB, TXs, B, RecallB, BlockTXPairs) ->
+try_apply_block(BI, NextB, TXs, B, POA, BlockTXPairs) ->
 	{FinderReward, _} =
 		ar_node_utils:calculate_reward_pool(
 			B#block.reward_pool,
 			TXs,
 			NextB#block.reward_addr,
-			RecallB#block.block_size,
+			POA,
 			NextB#block.weave_size,
 			NextB#block.height,
 			NextB#block.diff,
@@ -434,13 +436,20 @@ try_apply_block(BI, NextB, TXs, B, RecallB, BlockTXPairs) ->
 			FinderReward,
 			NextB#block.height
 		),
+	ar:d(
+		[
+			{b, B#block.block_index},
+			{next_b, NextB#block.block_index},
+			{poa, POA}
+		]
+	),
 	BlockValid = ar_node_utils:validate(
 		BI,
 		WalletList,
-		NextB,
+		NextB#block { poa = POA },
 		TXs,
 		B,
-		RecallB,
+		POA,
 		NextB#block.reward_addr,
 		NextB#block.tags
 	),
