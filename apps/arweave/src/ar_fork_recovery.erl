@@ -314,8 +314,8 @@ do_fork_recover(S = #state {
 							true ->
 								BBI = [{B#block.indep_hash, B#block.weave_size}|B#block.block_index],
 								POA =
-									case B#block.poa of
-										undefined -> ar_poa:generate(B);
+									case NextB#block.poa of
+										undefined -> ar_poa:generate(NextB);
 										X -> X
 									end,
 								%% TODO: Rewrite validate so it also takes recall block txs
