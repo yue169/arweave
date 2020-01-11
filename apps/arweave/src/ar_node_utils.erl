@@ -582,7 +582,7 @@ validate(#{ block_index := BI, wallet_list := WalletList }, B, TXs, OldB, Recall
 %% @doc Validate a new block, given a server state, a claimed new block, the last block,
 %% and the recall block.
 validate(
-		BI,
+		_BI,
 		WalletList,
 		NewB =
 			#block {
