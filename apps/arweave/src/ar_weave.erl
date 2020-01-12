@@ -31,7 +31,12 @@ init(WalletList, StartingDiff, RewardPool) ->
 			weave_size = 0,
 			block_size = 0,
 			reward_pool = RewardPool,
-			timestamp = os:system_time(seconds)
+			timestamp = os:system_time(seconds),
+			votables =
+				case ?FORK_2_0 of
+					0 -> ar_votable:init();
+					_ -> []
+				end
 		},
 	B1TS = B0#block { last_retarget = B0#block.timestamp },
 	B1 = B1TS#block { header_hash = header_hash(B1TS) },
@@ -56,7 +61,8 @@ init(WalletList, StartingDiff, RewardPool) ->
 			weave_size = 0,
 			block_size = 0,
 			reward_pool = RewardPool,
-			timestamp = os:system_time(seconds)
+			timestamp = os:system_time(seconds),
+			votables = ar_votable:init()
 		},
 	B1TS = B0#block { last_retarget = B0#block.timestamp },
 	B1 = B1TS#block { header_hash = header_hash(B1TS) },
@@ -180,6 +186,12 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 			_ ->
 				{ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.indep_hash), BI}
 		end,
+	NewVotables =
+		case NewHeight of
+			X when X == ?FORK_2_0 -> ar_votable:init();
+			X when X > ?FORK_2_0 -> ar_votable:vote(CurrentB#block.votables);
+			_ -> []
+		end,
 	NewB =
 		#block {
 			nonce = Nonce,
@@ -223,7 +235,8 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 				case NewHeight >= ?FORK_2_0 of
 					true -> POA;
 					false -> undefined
-				end
+				end,
+			votables = NewVotables
 		},
 	NewBHH = NewB#block { header_hash = header_hash(NewB)},
 	[
@@ -391,11 +404,22 @@ header_hash(B) ->
 			_ -> B#block.reward_addr
 		end,
 		ar_tx:tags_to_list(B#block.tags),
+
 		integer_to_binary(B#block.reward_pool),
 		integer_to_binary(B#block.weave_size),
 		integer_to_binary(B#block.block_size),
 		integer_to_binary(B#block.cumulative_diff)
-	]).
+	] ++
+	case B#block.height >= ?FORK_2_0 of
+		true ->
+			lists:map(
+				fun({Name, Value}) ->
+					[list_to_binary(Name), integer_to_binary(Value)]
+				end,
+				B#block.votables
+			);
+		false -> []
+	end).
 
 %% @doc Returns the transaction id
 tx_id(Id) when is_binary(Id) -> Id;

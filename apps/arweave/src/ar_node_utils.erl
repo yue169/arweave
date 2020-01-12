@@ -619,6 +619,7 @@ validate(
 				[
 					{pow, ar_mine:validate(POW, Diff, Height)},
 					{poa, ar_poa:validate(LastHeaderHash, LastWeaveSize, BI, POA)},
+					{votables, ar_votable:validate(NewB, OldB)},
 					{wallet_list, validate_wallet_list(WalletList)},
 					{txs, ar_tx:verify_txs(TXs, Diff, Height - 1, OldB#block.wallet_list, Timestamp)},
 					{tx_root, ar_block:verify_tx_root(NewB#block { txs = TXs })},

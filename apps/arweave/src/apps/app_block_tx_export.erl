@@ -214,12 +214,12 @@ reward_pool(S, B, PreviousB) ->
 	FullB = full_block(B, S#state.peers),
 	reward_pool1(FullB, PreviousB, POA).
 
-reward_pool1(B, PreviousB, PreviousRecallB) ->
+reward_pool1(B, PreviousB, POA) ->
 	ar_node_utils:calculate_reward_pool(
 		PreviousB#block.reward_pool,
 		B#block.txs,
 		B#block.reward_addr,
-		PreviousRecallB#block.block_size,
+		POA,
 		B#block.weave_size,
 		B#block.height,
 		B#block.diff,

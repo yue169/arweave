@@ -28,7 +28,7 @@ properties() ->
             name = "txs_per_block",
             max_up = 0.01,
             max_down = 0.02,
-            default = ?TO_INT(10000)
+            default = ?TO_INT(1000)
         }
     ].
 
@@ -57,10 +57,14 @@ get(Name, Votables) ->
 
 %% @doc Validate that a new block's votables are within bounds of the
 %% previous block.
-validate(NewB, OldB) ->
+validate(NewB, _) when NewB#block.height == ?FORK_2_0 ->
+    NewB#block.votables == init();
+validate(NewB, OldB) when NewB#block.height > ?FORK_2_0 ->
     VotePower = get("vote_power", OldB),
+    ar:d([{new_votables, NewB#block.votables}, {old_votables, OldB#block.votables}]),
     lists:all(
-        fun({Name, NewValue}) ->
+        fun({Name, RawNewValue}) ->
+            NewValue = ?TO_NUM(RawNewValue),
             P = lists:keyfind(Name, #property.name, properties()),
             PrevValue = get(Name, OldB),
             {Low, High} =
@@ -70,10 +74,12 @@ validate(NewB, OldB) ->
                     P#property.max_up,
                     P#property.max_down
                 ),
+            ar:d([{votable, Name}, {lower_bound, Low}, {upper_bound, High}, {new_value, NewValue}]),
             (NewValue >= Low) and (NewValue =< High)
         end,
         NewB#block.votables
-    ).
+    );
+validate(_, _) -> true.
 
 %% @doc Given the current voting power and property-specific possible
 %% change per block, calculate the maximum and minimum bounds in a new block.
@@ -98,8 +104,17 @@ vote(Votables) ->
                     P#property.max_up,
                     P#property.max_down
                 ),
+            ar:info(
+                [
+                    {voting_on_property, Name},
+                    {desired_value, ar_meta_db:get({votable, Name})},
+                    {current_value, Value},
+                    {upper_bound, High},
+                    {lower_bound, Low}
+                ]
+            ),
             case ar_meta_db:get({votable, Name}) of
-                false ->
+                not_found ->
                     {Name, BlockValue};
                 DesiredValue when DesiredValue > Value ->
                     {Name, ?TO_INT(erlang:min(DesiredValue, High))};
