@@ -1,6 +1,6 @@
 -module(ar_tx).
 -export([new/0, new/1, new/2, new/3, new/4]).
--export([sign/2, sign/3, verify/5, verify_txs/5, signature_data_segment/1]).
+-export([sign/2, sign/3, verify/5, verify_txs/6, signature_data_segment/1]).
 -export([tx_to_binary/1, tags_to_list/1]).
 -export([calculate_min_tx_cost/4, calculate_min_tx_cost/6, check_last_tx/2]).
 -export([generate_chunk_tree/1, generate_chunk_tree/2, generate_chunk_id/1]).
@@ -176,23 +176,24 @@ validate_overspend(TX, Wallets) ->
 
 %% @doc Verify a list of transactions.
 %% Returns false if any TX in the set fails verification.
-verify_txs(TXs, Diff, Height, WalletList, Timestamp) ->
+verify_txs(B, TXs, Diff, Height, WalletList, Timestamp) ->
 	WalletMap = ar_node_utils:wallet_map_from_wallet_list(WalletList),
 	case ar_fork:height_1_8() of
 		H when Height >= H ->
-			case verify_txs_size(TXs) of
+			case verify_txs_size(B, TXs) of
 				true ->
-					verify_txs(valid_size_txs, TXs, Diff, Height, WalletMap, Timestamp);
+					verify_txs(B, valid_size_txs, TXs, Diff, Height, WalletMap, Timestamp);
 				false ->
 					false
 			end;
 		_ ->
-			verify_txs(valid_size_txs, TXs, Diff, Height, WalletMap, Timestamp)
+			verify_txs(B, valid_size_txs, TXs, Diff, Height, WalletMap, Timestamp)
 	end.
 
-verify_txs_size(TXs) ->
+verify_txs_size(B, TXs) ->
+	Limit = erlang:trunc(ar_votable:get("txs_per_block", B)),
 	case length(TXs) of
-		L when L > ?BLOCK_TX_COUNT_LIMIT ->
+		NumTXs when NumTXs > Limit ->
 			false;
 		_ ->
 			TotalTXSize = lists:foldl(
@@ -205,12 +206,13 @@ verify_txs_size(TXs) ->
 			TotalTXSize =< ?BLOCK_TX_DATA_SIZE_LIMIT
 	end.
 
-verify_txs(valid_size_txs, [], _, _, _, _) ->
+verify_txs(_B, valid_size_txs, [], _, _, _, _) ->
 	true;
-verify_txs(valid_size_txs, [TX | TXs], Diff, Height, WalletMap, Timestamp) ->
+verify_txs(B, valid_size_txs, [TX | TXs], Diff, Height, WalletMap, Timestamp) ->
 	case verify(TX, Diff, Height, WalletMap, Timestamp) of
 		true ->
 			verify_txs(
+				B,
 				valid_size_txs,
 				TXs,
 				Diff,

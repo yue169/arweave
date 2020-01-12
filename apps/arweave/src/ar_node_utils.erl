@@ -507,7 +507,7 @@ integrate_new_block(
 					"!!!CAUTION!!!~n"
 					"Arweave is now transitioning to version 2.0. This may take a significant time.~n"
 					"In the event of an error, please check the Arweave community's communication channels to liasse with your fellow miners.~n"),
-				ar_transition:generate_checkpoint();
+				[{NewB#block.header_hash, NewB#block.weave_size}|ar_transition:generate_checkpoint(NewBI)];
 			_ -> NewBI
 		end,
 	reset_miner(StateIn#{
@@ -621,7 +621,7 @@ validate(
 					{poa, ar_poa:validate(LastHeaderHash, LastWeaveSize, BI, POA)},
 					{votables, ar_votable:validate(NewB, OldB)},
 					{wallet_list, validate_wallet_list(WalletList)},
-					{txs, ar_tx:verify_txs(TXs, Diff, Height - 1, OldB#block.wallet_list, Timestamp)},
+					{txs, ar_tx:verify_txs(NewB, TXs, Diff, Height - 1, OldB#block.wallet_list, Timestamp)},
 					{tx_root, ar_block:verify_tx_root(NewB#block { txs = TXs })},
 					{difficulty, ar_retarget:validate_difficulty(NewB, OldB)},
 					{header_hash, ar_weave:header_hash(NewB) == NewB#block.header_hash},
@@ -687,7 +687,7 @@ validate(
 	Mine = ar_mine:validate(BDSHash, Diff, Height),
 	Wallet = validate_wallet_list(WalletList),
 	IndepRecall = ar_weave:verify_indep(RecallB, BI),
-	Txs = ar_tx:verify_txs(TXs, Diff, Height - 1, OldB#block.wallet_list, Timestamp),
+	Txs = ar_tx:verify_txs(NewB, TXs, Diff, Height - 1, OldB#block.wallet_list, Timestamp),
 	DiffCheck = ar_retarget:validate_difficulty(NewB, OldB),
 	IndepHash = ar_block:verify_indep_hash(NewB),
 	Hash = ar_block:verify_dep_hash(NewB, BDSHash),

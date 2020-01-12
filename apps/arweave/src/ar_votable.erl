@@ -49,8 +49,8 @@ get(Atom, Votables) when is_atom(Atom) ->
 get(Name, Votables) ->
     case lists:keyfind(Name, 1, Votables) of
         false ->
-            {Name, Value} = lists:keyfind(Name, 1, properties()),
-            ?TO_NUM(Value);
+            P = lists:keyfind(Name, #property.name, properties()),
+            ?TO_NUM(P#property.default);
         {Name, Value} ->
             ?TO_NUM(Value)
     end.

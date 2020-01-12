@@ -689,7 +689,7 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp, POA) ->
 					NewBI2 =
 						case NextB#block.height == (?FORK_2_0) of
 							true ->
-								X = [{NextB#block.header_hash, NextB#block.weave_size} | NextB#block.block_index],
+								X = [ {NextB#block.header_hash, NextB#block.weave_size} | NextB#block.block_index ],
 								ar:info(
 									[
 										switching_v1_to_v2_block_index,
@@ -699,7 +699,7 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp, POA) ->
 								),
 								X;
 							false ->
-								[{NextB#block.indep_hash, NextB#block.weave_size} | BI]
+								[ {NextB#block.indep_hash, NextB#block.weave_size} | BI ]
 						end,
 					ar_storage:write_block_block_index(BinID, NewBI),
 					ar_miner_log:mined_block(NextB#block.indep_hash),
