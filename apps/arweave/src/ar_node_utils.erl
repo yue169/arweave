@@ -600,7 +600,7 @@ validate(
 		RewardAddr,
 		Tags
 	) when Height >= ?FORK_2_0 ->
-	BDSHash = ar_weave:hash(
+	POW = ar_weave:hash(
 		ar_block:generate_block_data_segment(OldB, POA, TXs, RewardAddr, Timestamp, Tags),
 		Nonce,
 		Height
@@ -609,7 +609,6 @@ validate(
 		[
 			{validating_block, ar_util:encode(NewB#block.indep_hash)},
 			{header_hash, ar_util:encode(NewB#block.header_hash)},
-			{poa, NewB#block.poa},
 			{poa_block_header, ar_util:encode(ar_weave:header_hash((NewB#block.poa)#poa.recall_block))}
 		]
 	),
@@ -617,14 +616,14 @@ validate(
 		timer:tc(
 			fun() ->
 				[
-					{pow, ar_mine:validate(BDSHash, Diff, Height)},
+					{pow, ar_mine:validate(POW, Diff, Height)},
 					{poa, ar_poa:validate(LastHeaderHash, LastWeaveSize, BI, POA)},
 					{wallet_list, validate_wallet_list(WalletList)},
 					{txs, ar_tx:verify_txs(TXs, Diff, Height - 1, OldB#block.wallet_list, Timestamp)},
 					{tx_root, ar_block:verify_tx_root(NewB#block { txs = TXs })},
 					{difficulty, ar_retarget:validate_difficulty(NewB, OldB)},
 					{header_hash, ar_weave:header_hash(NewB) == NewB#block.header_hash},
-					{dependent_hash, ar_block:verify_dep_hash(NewB, BDSHash)},
+					{dependent_hash, ar_block:verify_dep_hash(NewB, POW)},
 					{weave_size, ar_block:verify_weave_size(NewB, OldB, TXs)},
 					{block_field_sizes, ar_block:block_field_size_limit(NewB)},
 					{height, ar_block:verify_height(NewB, OldB)},
