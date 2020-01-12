@@ -34,6 +34,8 @@
 -define(FORK_1_6, 95000).
 -endif.
 -define(FORK_2_0, 377000).
+%-define(FORK_2_0, 3).
+%-define(FORK_2_0, 0).
 
 %% @doc Default auto-update watch address.
 -define(DEFAULT_UPDATE_ADDR, "8L1NmHR2qY9wH-AqgsOmdw98FMwrdIzTS5-bJi9YDZ4").
@@ -51,7 +53,7 @@
 -define(PRIV_KEY_SZ, 4096).
 
 %% @doc NB: Setting the default difficulty high will cause TNT to fail.
--define(DEFAULT_DIFF, 2).
+-define(DEFAULT_DIFF, 8).
 
 -ifndef(TARGET_TIME).
 -define(TARGET_TIME, 120).
@@ -118,7 +120,7 @@
 -define(TOTAL_WAITING_TXS_DATA_SIZE_LIMIT, 250 * 1024 * 1024).
 -endif.
 -ifdef(DEBUG).
--define(TX_DATA_SIZE_LIMIT, 10 * 1024).
+-define(TX_DATA_SIZE_LIMIT, 10 * 1024 * 1024).
 -else.
 -define(TX_DATA_SIZE_LIMIT, 10 * 1024 * 1024).
 -endif.
