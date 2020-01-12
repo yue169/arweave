@@ -28,35 +28,29 @@ large_tx_test_() ->
 	{timeout, 60, fun() ->
 		ar_storage:clear(),
 		{Priv1, Pub1} = ar_wallet:new(),
-		TX = ar_tx:new(crypto:strong_rand_bytes(1024), ?AR(10)),
+		TX = ar_tx:new(crypto:strong_rand_bytes(3 * 1024 * 1024), ?AR(10)),
 		SignedTX = ar_tx:sign(TX, Priv1, Pub1),
-		TX2 = ar_tx:new(crypto:strong_rand_bytes(1024), ?AR(10), SignedTX#tx.id),
-		SignedTX2 = ar_tx:sign(TX2, Priv1, Pub1),
-		TX3 = ar_tx:new(crypto:strong_rand_bytes(1024), ?AR(10), SignedTX2#tx.id),
-		SignedTX3 = ar_tx:sign(TX3, Priv1, Pub1),
 		ar_storage:write_tx(SignedTX),
-		ar_storage:write_tx(SignedTX2),
-		ar_storage:write_tx(SignedTX3),
 		B0 =
 			ar_weave:init(
 				[
-					{ar_wallet:to_address(Pub1), ?AR(10000), <<>>}
+					{ar_wallet:to_address(Pub1), ?AR(100000), <<>>}
 				]
 			),
 		Node1 = ar_node:start([], B0),
 		ar_node:add_tx(Node1, SignedTX),
 		timer:sleep(300),
 		ar_node:mine(Node1),
-		timer:sleep(3000),
-		ar_node:add_tx(Node1, SignedTX),
-		timer:sleep(300),
-		ar_node:mine(Node1),
-		timer:sleep(3000),
-		ar_node:add_tx(Node1, SignedTX),
-		timer:sleep(300),
-		ar_node:mine(Node1),
-		timer:sleep(3000),
-		4 = ar_node:get_height(Node1)
+		ar_util:do_until(
+			fun() ->
+				length(ar_node:get_blocks(Node1)) == 2
+			end,
+			100,
+			30 * 1000
+		),
+		?assert(
+			length((hd(ar_node:get_blocks(Node1)))#block.txs) == 1
+		)
 	end}.
 	
 %% @doc Ensure that the hieght of the node can be correctly obtained externally.
