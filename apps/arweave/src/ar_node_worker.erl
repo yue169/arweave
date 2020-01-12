@@ -687,9 +687,19 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp, POA) ->
 						),
 					ar_node_utils:log_invalid_txs_drop_reason(InvalidTXs),
 					NewBI2 =
-						case NextB#block.height == (?FORK_2_0 - 1) of
+						case NextB#block.height == (?FORK_2_0) of
 							true ->
-								[{NextB#block.header_hash, NextB#block.weave_size} | NextB#block.block_index];
+								X = [{NextB#block.header_hash, NextB#block.weave_size} | NextB#block.block_index],
+								ar:d(
+									[
+										switching_v1_to_v2_block_index,
+										{height, NextB#block.height},
+										{block, ar_util:encode(NextB#block.header_hash)},
+										{old_bi, [ ar_util:encode(BH) || {BH, _} <- NewBI ]},
+										{new_bi, [ ar_util:encode(BH) || {BH, _} <- X ]}
+									]
+								),
+								X;
 							false ->
 								[{NextB#block.indep_hash, NextB#block.weave_size} | BI]
 						end,

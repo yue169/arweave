@@ -161,7 +161,15 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 	{MR, NewBI} =
 		case NewHeight of
 			_ when NewHeight == ?FORK_2_0 ->
-				CP = [{H, _}|_] = ar_transition:generate_checkpoint(CurrentB#block.block_index),
+				CP = [{H, _}|_] =
+					ar_transition:generate_checkpoint(
+						[{CurrentB#block.indep_hash, CurrentB#block.weave_size}|CurrentB#block.block_index]),
+				ar:info(
+					[
+						performing_v2_block_index_transition,
+						{new_block_index_root, ar_util:encode(H)}
+					]
+				),
 				{H, CP};
 			_ when NewHeight > ?FORK_2_0 ->
 				{ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.header_hash), BI};

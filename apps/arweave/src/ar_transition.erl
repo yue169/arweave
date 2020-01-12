@@ -44,9 +44,9 @@ do_generate_checkpoint([H|HL], [], BI) ->
                 [ar_utils:encode(H)]),
             error;
         true ->
-            BWithTree = ar_block:generate_data_tree(RawB),
+            BWithTree = ar_block:generate_tx_tree(RawB),
             B = BWithTree#block { header_hash = ar_weave:header_hash(BWithTree) },
-            ar_storage:write(B),
+            ar_storage:write_block(B),
             [{B#block.header_hash, B#block.weave_size}|do_generate_checkpoint(HL, [], BI)]
     end.
 
@@ -56,13 +56,26 @@ save_checkpoint(File, Checkpoint) ->
     JSON = ar_serialize:jsonify(ar_serialize:block_index_to_json_struct(Checkpoint)),
     file:write_file(File, JSON).
 
+-ifdef(DEBUG).
+load_checkpoint() -> [].
+load_checkpoint(_) -> [].
+-else.
 load_checkpoint() ->
     load_checkpoint(ar_meta_db:get(checkpoint_location)).
 load_checkpoint(File) ->
     case file:read_file(File) of
         {ok, Bin} ->
-            ar_serialize:json_struct_to_block_index(ar_serialize:dejsonify(Bin));
+            CP = ar_serialize:json_struct_to_block_index(ar_serialize:dejsonify(Bin)),
+            ar:info(
+                [
+                    loaded_header_hash_block_index,
+                    {file, File},
+                    {cp, CP}
+                ]
+            ),
+            CP;
         _ ->
             io:format("Checkpoint not loaded. Starting from Genesis block..."),
-            [{<< 0:(32*8) >>, 0}]
+            []
     end.
+-endif.

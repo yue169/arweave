@@ -137,10 +137,7 @@ validate(LastHeaderHash, WeaveSize, BI, RawPOA) ->
 	POA = RawPOA#poa { recall_block = ar_storage:read_block(RawPOA#poa.recall_block, BI)}, 
 	ChallengeByte = calculate_challenge_byte(LastHeaderHash, WeaveSize, POA#poa.option),
 	{ChallengeBlock, BlockBase} = find_challenge_block(ChallengeByte, BI),
-	case is_old_poa(ChallengeBlock, BI) of
-		true -> validate_old_poa(BI, POA);
-		false -> validate_recall_block(ChallengeByte - BlockBase, ChallengeBlock, POA)
-	end.
+	validate_recall_block(ChallengeByte - BlockBase, ChallengeBlock, POA).
 
 calculate_challenge_byte(_, 0, _) -> 0;
 calculate_challenge_byte(LastHeaderHash, WeaveSize, Option) ->
@@ -163,16 +160,6 @@ find_byte_in_size_tagged_list(Byte, [{ID, TXEnd}|_])
 		when TXEnd >= Byte -> ID;
 find_byte_in_size_tagged_list(Byte, [_|Rest]) ->
 	find_byte_in_size_tagged_list(Byte, Rest).
-
-calculate_block_height(BH, [{BH, _}|_BI]) -> 0;
-calculate_block_height(BH, [_|BI]) ->
-	calculate_block_height(BH, BI).
-
-is_old_poa(ChallengeBlock, BI) ->
-	calculate_block_height(ChallengeBlock, BI) < ar_fork:height_2_0().
-
-validate_old_poa(_, _) ->
-	error(not_implemented).
 
 validate_recall_block(BlockOffset, ChallengeBH, POA) ->
 	ar:d([{poa_validation_rb, ar_util:encode(ar_weave:header_hash(POA#poa.recall_block))}, {challenge, ar_util:encode(ChallengeBH)}]),
