@@ -158,19 +158,19 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 			false ->
 				0
 		end,
-	MR =
+	{MR, NewBI} =
 		case NewHeight of
 			_ when NewHeight == ?FORK_2_0 ->
-				[{H, _}|_] = ar_transition:generate_checkpoint(CurrentB#block.block_index),
-				H;
+				CP = [{H, _}|_] = ar_transition:generate_checkpoint(CurrentB#block.block_index),
+				{H, CP};
 			_ when NewHeight > ?FORK_2_0 ->
-				ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.header_hash);
+				{ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.header_hash), BI};
 			_ when NewHeight < ?FORK_1_6 ->
-				<<>>;
+				{<<>>, BI};
 			_ when NewHeight == ?FORK_1_6 ->
-				ar_unbalanced_merkle:block_block_index_to_merkle_root(CurrentB#block.block_index);
+				{ar_unbalanced_merkle:block_block_index_to_merkle_root(CurrentB#block.block_index), BI};
 			_ ->
-				ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.indep_hash)
+				{ar_unbalanced_merkle:root(CurrentB#block.block_index_merkle, CurrentB#block.indep_hash), BI}
 		end,
 	NewB =
 		#block {
@@ -199,7 +199,7 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 			),
 			txs = TXs,
 			tx_root = TXRoot,
-			block_index = BI,
+			block_index = NewBI,
 			block_index_merkle = MR,
 			wallet_list = WalletList,
 			reward_addr = RewardAddr,
@@ -391,8 +391,8 @@ tx_id(TX) -> TX#tx.id.
 
 %% @doc Spawn a miner and mine the current block synchronously. Used for testing.
 %% Returns the nonce to use to add the block to the list.
-mine(B, RecallB, TXs, RewardAddr, Tags) ->
-	ar_mine:start(B, RecallB, TXs, RewardAddr, Tags, self(), []),
+mine(B, POA, TXs, RewardAddr, Tags) ->
+	ar_mine:start(B, POA, TXs, RewardAddr, Tags, self(), []),
 	receive
 		{work_complete, _BH, TXs, _Hash, _POA, Diff, Nonce, Timestamp, _} ->
 			{Nonce, Timestamp, Diff}

@@ -54,34 +54,36 @@ large_tx_test_() ->
 	end}.
 	
 %% @doc Ensure that the hieght of the node can be correctly obtained externally.
-%get_height_2_test() ->
-%	ar_storage:clear(),
-%	B0 = ar_weave:init([], ?DEFAULT_DIFF, ?AR(1)),
-%	TX1 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
-%	TX2 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
-%	TX3 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
-%	TX4 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
-%	ar_storage:write_tx(TX1),
-%	ar_storage:write_tx(TX2),
-%	ar_storage:write_tx(TX3),
-%	ar_storage:write_tx(TX4),
-%	Node1 = ar_node:start([self()], B0),
-%	0 = ar_node:get_height(Node1),
-%	ar_node:add_tx(Node1, TX1),
-%	ar_node:add_tx(Node1, TX2),
-%	timer:sleep(10000),
-%	ar_node:mine(Node1),
-%	timer:sleep(5000),
-%	1 = ar_node:get_height(Node1),
-%	ar_node:add_tx(Node1, TX3),
-%	ar_node:add_tx(Node1, TX4),
-%	timer:sleep(10000),
-%	ar_node:mine(Node1),
-%	timer:sleep(5000),
-%	2 = ar_node:get_height(Node1),
-%	ar_node:mine(Node1),
-%	timer:sleep(5000),
-%	3 = ar_node:get_height(Node1).
+mine_three_blocks_with_txs_test_() ->
+	{timeout, 30, fun() ->
+		ar_storage:clear(),
+		B0 = ar_weave:init([], ?DEFAULT_DIFF, ?AR(1)),
+		TX1 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
+		TX2 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
+		TX3 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
+		TX4 = ar_tx:new(crypto:strong_rand_bytes(1000000)),
+		ar_storage:write_tx(TX1),
+		ar_storage:write_tx(TX2),
+		ar_storage:write_tx(TX3),
+		ar_storage:write_tx(TX4),
+		Node1 = ar_node:start([self()], B0),
+		0 = ar_node:get_height(Node1),
+		ar_node:add_tx(Node1, TX1),
+		ar_node:add_tx(Node1, TX2),
+		timer:sleep(1000),
+		ar_node:mine(Node1),
+		timer:sleep(3000),
+		1 = ar_node:get_height(Node1),
+		ar_node:add_tx(Node1, TX3),
+		ar_node:add_tx(Node1, TX4),
+		timer:sleep(1000),
+		ar_node:mine(Node1),
+		timer:sleep(3000),
+		2 = ar_node:get_height(Node1),
+		ar_node:mine(Node1),
+		timer:sleep(3000),
+		3 = ar_node:get_height(Node1)
+	end}.
 
 %% @doc Test retrieval of the current block hash.
 get_current_block_hash_test() ->
@@ -209,136 +211,136 @@ get_current_block_test() ->
 	?assertEqual(B0, B1).
 
 %% @doc Ensure that bogus blocks are not accepted onto the network.
-add_bogus_block_test() ->
-	ar_storage:clear(),
-	ar_storage:write_tx(
-		[
-			TX1 = ar_tx:new(<<"HELLO WORLD">>),
-			TX2 = ar_tx:new(<<"NEXT BLOCK.">>)
-		]
-	),
-	Node = ar_node:start(),
-	GS0 = ar_gossip:init([Node]),
-	B0 = ar_weave:init([]),
-	ar_storage:write_block(B0),
-	B1 = ar_weave:add(B0, [TX1]),
-	LastB = hd(B1),
-	ar_storage:write_block(hd(B1)),
-	BL = [hd(B1), hd(B0)],
-	Node ! {replace_block_list, BL},
-	Bs = [B2|_] = ar_weave:add(B1, [TX2]),
-	ar_storage:write_block(B2),
-	POA = ar_poa:generate(hd(Bs)),
-	Recall =
-		case POA of
-			X when is_record(X, poa) -> POA;
-			false -> {POA#block.indep_hash, <<>>, <<>>}
-		end,
-	ar_gossip:send(GS0,
-		{
-			new_block,
-			self(),
-			B2#block.height,
-			B2#block { hash = <<"INCORRECT">> },
-			Recall
-		}),
-	?assert(ar_util:do_until(
-		fun() ->
-			[RecvdB | _] = ar_node:get_blocks(Node),
-			LastB == ar_storage:read_block(RecvdB, B2#block.block_index)
-		end,
-		500,
-		4000
-	)).
+%add_bogus_block_test() ->
+%	ar_storage:clear(),
+%	ar_storage:write_tx(
+%		[
+%			TX1 = ar_tx:new(<<"HELLO WORLD">>),
+%			TX2 = ar_tx:new(<<"NEXT BLOCK.">>)
+%		]
+%	),
+%	Node = ar_node:start(),
+%	GS0 = ar_gossip:init([Node]),
+%	B0 = ar_weave:init([]),
+%	ar_storage:write_block(B0),
+%	B1 = ar_weave:add(B0, [TX1]),
+%	LastB = hd(B1),
+%	ar_storage:write_block(hd(B1)),
+%	BL = [hd(B1), hd(B0)],
+%	Node ! {replace_block_list, BL},
+%	Bs = [B2|_] = ar_weave:add(B1, [TX2]),
+%	ar_storage:write_block(B2),
+%	POA = ar_poa:generate(hd(Bs)),
+%	Recall =
+%		case POA of
+%			X when is_record(X, poa) -> POA;
+%			false -> {POA#block.indep_hash, <<>>, <<>>}
+%		end,
+%	ar_gossip:send(GS0,
+%		{
+%			new_block,
+%			self(),
+%			B2#block.height,
+%			B2#block { hash = <<"INCORRECT">> },
+%			Recall
+%		}),
+%	?assert(ar_util:do_until(
+%		fun() ->
+%			[RecvdB | _] = ar_node:get_blocks(Node),
+%			LastB == ar_storage:read_block(RecvdB, B2#block.block_index)
+%		end,
+%		500,
+%		4000
+%	)).
 
 %% @doc Ensure that blocks with incorrect nonces are not accepted onto
 %% the network.
-add_bogus_block_nonce_test() ->
-	ar_storage:clear(),
-	ar_storage:write_tx(
-		[
-			TX1 = ar_tx:new(<<"HELLO WORLD">>),
-			TX2 = ar_tx:new(<<"NEXT BLOCK.">>)
-		]
-	),
-	Node = ar_node:start(),
-	GS0 = ar_gossip:init([Node]),
-	B0 = ar_weave:init([]),
-	ar_storage:write_block(B0),
-	B1 = ar_weave:add(B0, [TX1]),
-	LastB = hd(B1),
-	ar_storage:write_block(hd(B1)),
-	BL = [hd(B1), hd(B0)],
-	Node ! {replace_block_list, BL},
-	B2 = ar_weave:add(B1, [TX2]),
-	ar_storage:write_block(hd(B2)),
-	POA = ar_poa:generate(B1),
-	Recall =
-		case POA of
-			X when is_record(X, poa) -> POA;
-			false -> {POA#block.indep_hash, <<>>, <<>>}
-		end,
-	ar_gossip:send(GS0,
-		{new_block,
-			self(),
-			(hd(B2))#block.height,
-			(hd(B2))#block { nonce = <<"INCORRECT">> },
-			Recall
-		}
-	),
-	?assert(ar_util:do_until(
-		fun() ->
-			RecvdBs = ar_node:get_blocks(Node),
-			LastB == ar_storage:read_block(hd(RecvdBs), (hd(B2))#block.block_index)
-		end,
-		500,
-		4000
-	)).
+%add_bogus_block_nonce_test() ->
+%	ar_storage:clear(),
+%	ar_storage:write_tx(
+%		[
+%			TX1 = ar_tx:new(<<"HELLO WORLD">>),
+%			TX2 = ar_tx:new(<<"NEXT BLOCK.">>)
+%		]
+%	),
+%	Node = ar_node:start(),
+%	GS0 = ar_gossip:init([Node]),
+%	B0 = ar_weave:init([]),
+%	ar_storage:write_block(B0),
+%	B1 = ar_weave:add(B0, [TX1]),
+%	LastB = hd(B1),
+%	ar_storage:write_block(hd(B1)),
+%	BL = [hd(B1), hd(B0)],
+%	Node ! {replace_block_list, BL},
+%	B2 = ar_weave:add(B1, [TX2]),
+%	ar_storage:write_block(hd(B2)),
+%	POA = ar_poa:generate(B1),
+%	Recall =
+%		case POA of
+%			X when is_record(X, poa) -> POA;
+%			false -> {POA#block.indep_hash, <<>>, <<>>}
+%		end,
+%	ar_gossip:send(GS0,
+%		{new_block,
+%			self(),
+%			(hd(B2))#block.height,
+%			(hd(B2))#block { nonce = <<"INCORRECT">> },
+%			Recall
+%		}
+%	),
+%	?assert(ar_util:do_until(
+%		fun() ->
+%			RecvdBs = ar_node:get_blocks(Node),
+%			LastB == ar_storage:read_block(hd(RecvdBs), (hd(B2))#block.block_index)
+%		end,
+%		500,
+%		4000
+%	)).
 
 %% @doc Ensure that blocks with bogus hash lists are not accepted by the network.
-add_bogus_block_index_test() ->
-	ar_storage:clear(),
-	ar_storage:write_tx(
-		[
-			TX1 = ar_tx:new(<<"HELLO WORLD">>),
-			TX2 = ar_tx:new(<<"NEXT BLOCK.">>)
-		]
-	),
-	Node = ar_node:start(),
-	GS0 = ar_gossip:init([Node]),
-	B0 = ar_weave:init([]),
-	ar_storage:write_block(B0),
-	B1 = ar_weave:add(B0, [TX1]),
-	LastB = hd(B1),
-	ar_storage:write_block(hd(B1)),
-	BL = [hd(B1), hd(B0)],
-	Node ! {replace_block_list, BL},
-	B2 = ar_weave:add(B1, [TX2]),
-	ar_storage:write_block(hd(B2)),
-	POA = ar_poa:generate(B2),
-	Recall =
-		case POA of
-			X when is_record(X, poa) -> POA;
-			false -> {POA#block.indep_hash, <<>>, <<>>}
-		end,
-	ar_gossip:send(GS0,
-		{new_block,
-			self(),
-			(hd(B2))#block.height,
-			(hd(B2))#block {
-				block_index =
-					[{<<"INCORRECT HASH">>, element(2, hd((hd(B2))#block.block_index))} | tl((hd(B2))#block.block_index)]
-			},
-			Recall
-		}),
-	?assert(ar_util:do_until(
-		fun() ->
-			[RecvdB | _] = ar_node:get_blocks(Node),
-			LastB == ar_storage:read_block(RecvdB, (hd(B2))#block.block_index)
-		end,
-		500,
-		4000
-	)).
+%add_bogus_block_index_test() ->
+%	ar_storage:clear(),
+%	ar_storage:write_tx(
+%		[
+%			TX1 = ar_tx:new(<<"HELLO WORLD">>),
+%			TX2 = ar_tx:new(<<"NEXT BLOCK.">>)
+%		]
+%	),
+%	Node = ar_node:start(),
+%	GS0 = ar_gossip:init([Node]),
+%	B0 = ar_weave:init([]),
+%	ar_storage:write_block(B0),
+%	B1 = ar_weave:add(B0, [TX1]),
+%	LastB = hd(B1),
+%	ar_storage:write_block(hd(B1)),
+%	BL = [hd(B1), hd(B0)],
+%	Node ! {replace_block_list, BL},
+%	B2 = ar_weave:add(B1, [TX2]),
+%	ar_storage:write_block(hd(B2)),
+%	POA = ar_poa:generate(B2),
+%	Recall =
+%		case POA of
+%			X when is_record(X, poa) -> POA;
+%			false -> {POA#block.indep_hash, <<>>, <<>>}
+%		end,
+%	ar_gossip:send(GS0,
+%		{new_block,
+%			self(),
+%			(hd(B2))#block.height,
+%			(hd(B2))#block {
+%				block_index =
+%					[{<<"INCORRECT HASH">>, element(2, hd((hd(B2))#block.block_index))} | tl((hd(B2))#block.block_index)]
+%			},
+%			Recall
+%		}),
+%	?assert(ar_util:do_until(
+%		fun() ->
+%			[RecvdB | _] = ar_node:get_blocks(Node),
+%			LastB == ar_storage:read_block(RecvdB, (hd(B2))#block.block_index)
+%		end,
+%		500,
+%		4000
+%	)).
 
 %% @doc Run a small, non-auto-mining blockweave. Mine blocks.
 tiny_blockweave_with_mining_test() ->

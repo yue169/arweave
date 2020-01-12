@@ -13,7 +13,7 @@ generate([B]) when is_record(B, block) ->
 	% Special Genesis test case.
 	generate(B);
 generate(B) when is_record(B, block) ->
-	generate([{B#block.header_hash, 0}]);
+	generate([{B#block.indep_hash, 0}]);
 generate([B|_]) when is_record(B, block) -> 
 	generate(B);
 generate([]) -> unavailable;
