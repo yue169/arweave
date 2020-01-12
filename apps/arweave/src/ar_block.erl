@@ -508,7 +508,7 @@ verify_tx_root(B) ->
 %% @doc Given a list of TXs in various formats, or a block, generate the
 %% correct TX merkle tree root.
 generate_tx_root_for_block(B) when is_record(B, block) ->
-	generate_tx_root_for_block(ar:d(B#block.txs));
+	generate_tx_root_for_block(B#block.txs);
 generate_tx_root_for_block(TXIDs = [TXID|_]) when is_binary(TXID) ->
 	generate_tx_root_for_block(ar_storage:read_tx(TXIDs));
 generate_tx_root_for_block(TXs = [TX|_]) when is_record(TX, tx) ->
