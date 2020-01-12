@@ -477,7 +477,7 @@ generate_block_from_shadow(StateIn, BShadow, Recall, TXs, NewBI, Peer) ->
 	{RecallIndepHash, Key, Nonce} =
 		case Recall of
 			B when is_record(B, block) -> {B#block.indep_hash, <<>>, B#block.nonce};
-			no_recall ->
+			undefined ->
 				{
 					ar_util:get_recall_hash(BShadow#block.previous_block, BShadow#block.height - 1, NewBI),
 					<<>>,
@@ -686,7 +686,13 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp, POA) ->
 							NextB#block.wallet_list
 						),
 					ar_node_utils:log_invalid_txs_drop_reason(InvalidTXs),
-					NewBI = [{NextB#block.indep_hash, NextB#block.weave_size} | BI],
+					NewBI2 =
+						case NextB#block.height == (?FORK_2_0 - 1) of
+							true ->
+								[{NextB#block.header_hash, NextB#block.weave_size} | NextB#block.block_index];
+							false ->
+								[{NextB#block.indep_hash, NextB#block.weave_size} | BI]
+						end,
 					ar_storage:write_block_block_index(BinID, NewBI),
 					ar_miner_log:mined_block(NextB#block.indep_hash),
 					ar:report_console(
@@ -709,8 +715,8 @@ integrate_block_from_miner(StateIn, MinedTXs, Diff, Nonce, Timestamp, POA) ->
 						),
 					{ok, ar_node_utils:reset_miner(
 						StateNew#{
-							block_index          => NewBI,
-							current              => element(1, hd(NewBI)),
+							block_index          => NewBI2,
+							current              => element(1, hd(NewBI2)),
 							gossip               => NewGS,
 							txs                  => ValidTXs,
 							height               => NextB#block.height,
@@ -823,7 +829,7 @@ do_recovered_from_fork(StateIn, NewB, BlockTXPairs) ->
 	ar_storage:write_block_block_index(BinID, NextBI),
 	{ok, ar_node_utils:reset_miner(
 		StateIn#{
-			block_index            => NextBI,
+			block_index          => NextBI,
 			current              => NewB#block.indep_hash,
 			wallet_list          => NewB#block.wallet_list,
 			height               => NewB#block.height,
