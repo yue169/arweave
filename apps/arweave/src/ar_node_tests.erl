@@ -23,6 +23,42 @@ get_height_test() ->
 	timer:sleep(1000),
 	1 = ar_node:get_height(Node1).
 
+%% @doc Ensure that nodes will not re-gossip txs more than once.
+large_tx_test_() ->
+	{timeout, 60, fun() ->
+		ar_storage:clear(),
+		{Priv1, Pub1} = ar_wallet:new(),
+		TX = ar_tx:new(crypto:strong_rand_bytes(1024), ?AR(10)),
+		SignedTX = ar_tx:sign(TX, Priv1, Pub1),
+		TX2 = ar_tx:new(crypto:strong_rand_bytes(1024), ?AR(10), SignedTX#tx.id),
+		SignedTX2 = ar_tx:sign(TX2, Priv1, Pub1),
+		TX3 = ar_tx:new(crypto:strong_rand_bytes(1024), ?AR(10), SignedTX2#tx.id),
+		SignedTX3 = ar_tx:sign(TX3, Priv1, Pub1),
+		ar_storage:write_tx(SignedTX),
+		ar_storage:write_tx(SignedTX2),
+		ar_storage:write_tx(SignedTX3),
+		B0 =
+			ar_weave:init(
+				[
+					{ar_wallet:to_address(Pub1), ?AR(10000), <<>>}
+				]
+			),
+		Node1 = ar_node:start([], B0),
+		ar_node:add_tx(Node1, SignedTX),
+		timer:sleep(300),
+		ar_node:mine(Node1),
+		timer:sleep(3000),
+		ar_node:add_tx(Node1, SignedTX),
+		timer:sleep(300),
+		ar_node:mine(Node1),
+		timer:sleep(3000),
+		ar_node:add_tx(Node1, SignedTX),
+		timer:sleep(300),
+		ar_node:mine(Node1),
+		timer:sleep(3000),
+		4 = ar_node:get_height(Node1)
+	end}.
+	
 %% @doc Ensure that the hieght of the node can be correctly obtained externally.
 %get_height_2_test() ->
 %	ar_storage:clear(),
@@ -258,8 +294,8 @@ add_bogus_block_nonce_test() ->
 	),
 	?assert(ar_util:do_until(
 		fun() ->
-			[RecvdB | _] = ar_node:get_blocks(Node),
-			LastB == ar_storage:read_block(RecvdB, (hd(B2))#block.block_index)
+			RecvdBs = ar_node:get_blocks(Node),
+			LastB == ar_storage:read_block(hd(RecvdBs), (hd(B2))#block.block_index)
 		end,
 		500,
 		4000

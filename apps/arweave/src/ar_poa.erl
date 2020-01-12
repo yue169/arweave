@@ -18,7 +18,7 @@ generate([B|_]) when is_record(B, block) ->
 	generate(B);
 generate([]) -> unavailable;
 generate([{Seed, WeaveSize}|_] = BI) ->
-	ar:d([{generating_poa_for, ar_util:encode(Seed)}]),
+	ar:d([{generating_poa_for_block_after, ar_util:encode(Seed)}]),
 	case length(BI) >= ?FORK_2_0 of
 		true ->
 			generate(
@@ -35,31 +35,37 @@ generate([{Seed, WeaveSize}|_] = BI) ->
 generate(_, _, _, N, N) -> unavailable;
 generate(Seed, WeaveSize, BI, Option, Limit) ->
 	ChallengeByte = calculate_challenge_byte(Seed, WeaveSize, Option),
-	ChallengeBlock = find_challenge_block(ChallengeByte, BI),
+	{ChallengeBlock, BlockBase} = find_challenge_block(ChallengeByte, BI),
+	ar:d(
+		[
+			{poa_validation_block_indexes, [ {ar_util:encode(BH), WVSZ} || {BH, WVSZ} <- BI ]},
+			{challenge_block, ar_util:encode(ChallengeBlock)}
+		]
+	),
 	case ar_storage:read_block(ChallengeBlock, BI) of
 		unavailable ->
 			generate(Seed, WeaveSize, BI, Option + 1, Limit);
 		B ->
 			case B#block.txs of
-				[] -> create_poa_from_data(B, no_tx, [], ChallengeByte, Option);
+				[] -> create_poa_from_data(B, no_tx, [], ChallengeByte - BlockBase, Option);
 				TXIDs ->
 					TXs = ar_storage:read_tx(TXIDs),
 					SizeTaggedTXs = ar_block:generate_size_tagged_list_from_txs(TXs),
 					TXID =
 						find_byte_in_size_tagged_list(
-							ChallengeByte - B#block.weave_size,
+							ChallengeByte - BlockBase,
 							SizeTaggedTXs
 						),
 					case ar_storage:read_tx(TXID) of
 						unavailable ->
 							generate(Seed, WeaveSize, BI, Option + 1, Limit);
 						NoTreeTX ->
-							create_poa_from_data(B, NoTreeTX, SizeTaggedTXs, ChallengeByte, Option)
+							create_poa_from_data(B, NoTreeTX, SizeTaggedTXs, ChallengeByte - BlockBase, Option)
 					end
 			end
 	end.
 
-create_poa_from_data(B, no_tx, _, _ChallengeByte, Option) ->
+create_poa_from_data(B, no_tx, _, _BlockOffset, Option) ->
 	#poa {
 		option = Option,
 		recall_block = B#block { txs = [], block_index = [], poa = undefined },
@@ -68,26 +74,38 @@ create_poa_from_data(B, no_tx, _, _ChallengeByte, Option) ->
 		chunk = <<>>,
 		tx = undefined
 	};
-create_poa_from_data(NoTreeB, NoTreeTX, SizeTaggedTXs, ChallengeByte, Option) ->
+create_poa_from_data(NoTreeB, NoTreeTX, SizeTaggedTXs, BlockOffset, Option) ->
 	B = ar_block:generate_tx_tree(NoTreeB, SizeTaggedTXs),
-	TX = ar_tx:generate_data_tree(NoTreeTX),
-	Chunks = ar_tx:generate_size_tagged_list_from_binary(ar:d(TX#tx.data)),
-	{_TXID, TXStart} = lists:keyfind(TX#tx.id, 1, SizeTaggedTXs),
-	Chunk =
-		find_byte_in_size_tagged_list(
-			ChallengeByte - B#block.weave_size - TXStart,
-			Chunks
-		),
+	{_TXID, TXEnd} = lists:keyfind(NoTreeTX#tx.id, 1, SizeTaggedTXs),
+	TXStart = TXEnd - NoTreeTX#tx.data_size,
+	TXOffset = BlockOffset - TXStart,
+	Chunks = ar_tx:chunk_binary(?DATA_CHUNK_SIZE, NoTreeTX#tx.data),
+	SizedChunks = ar_tx:chunks_to_size_tagged_chunks(Chunks),
+	Chunk = find_byte_in_size_tagged_list(TXOffset, SizedChunks),
+	SizedChunkIDs = ar_tx:sized_chunks_to_sized_chunk_ids(SizedChunks),
+	TX = ar_tx:generate_chunk_tree(NoTreeTX, SizedChunkIDs),
+	ar:info(
+		[
+			poa_generation,
+			{weave_size, B#block.weave_size},
+			{block_offset, BlockOffset},
+			{tx_offset, BlockOffset},
+			{tx_start, TXStart},
+			{chunk_size, byte_size(Chunk)},
+			{chunk_num, search(Chunk, SizedChunks)},
+			{chunk_id, ar_util:encode(ar_tx:generate_chunk_id(Chunk))}
+		]
+	),
 	TXPath =
 		ar_merkle:generate_path(
 			B#block.tx_root,
-			ChallengeByte - B#block.weave_size,
+			BlockOffset,
 			B#block.tx_tree
 		),
 	DataPath =
 		ar_merkle:generate_path(
 			TX#tx.data_root,
-			ChallengeByte - B#block.weave_size - TXStart,
+			TXOffset,
 			TX#tx.data_tree
 		),
 	#poa {
@@ -110,15 +128,18 @@ create_poa_from_data(NoTreeB, NoTreeTX, SizeTaggedTXs, ChallengeByte, Option) ->
 		chunk = Chunk
 	}.
 
+search(X, [{X,_}|_]) -> 0;
+search(X, [_|R]) -> 1 + search(X, R).
+
 %% @doc Validate a complete proof of access object.
 validate(LastHeaderHash, WeaveSize, BI, RawPOA) ->
-	ar:d({header, [ ar_util:encode(BH) || {BH, _} <- BI ]}),
+	ar:d([{poa_validation_block_indexes, [ {ar_util:encode(BH), WVSZ} || {BH, WVSZ} <- BI ]}]),
 	POA = RawPOA#poa { recall_block = ar_storage:read_block(RawPOA#poa.recall_block, BI)}, 
 	ChallengeByte = calculate_challenge_byte(LastHeaderHash, WeaveSize, POA#poa.option),
-	ChallengeBlock = find_challenge_block(ChallengeByte, BI),
+	{ChallengeBlock, BlockBase} = find_challenge_block(ChallengeByte, BI),
 	case is_old_poa(ChallengeBlock, BI) of
 		true -> validate_old_poa(BI, POA);
-		false -> validate_recall_block(ChallengeByte, ChallengeBlock, POA)
+		false -> validate_recall_block(ChallengeByte - BlockBase, ChallengeBlock, POA)
 	end.
 
 calculate_challenge_byte(_, 0, _) -> 0;
@@ -132,14 +153,14 @@ multihash(X, Remaining) ->
 %% @doc The base of the block is the weave_size tag of the _previous_ block.
 %% Traverse the block index until the challenge block is inside the block's bounds.
 find_challenge_block(Byte, [{BH, BlockTop},{_,BlockBase}|_])
-	when (Byte >= BlockBase) and (Byte < BlockTop) -> BH;
+	when (Byte >= BlockBase) and (Byte < BlockTop) -> {BH, BlockBase};
 %% When we are mining the first non-Genesis block, the Geneis block is the challenge.
-find_challenge_block(_Byte, [{BH, _}]) -> BH;
+find_challenge_block(_Byte, [{BH, _}]) -> {BH, 0};
 find_challenge_block(Byte, [_|R]) ->
 	find_challenge_block(Byte, R).
 
-find_byte_in_size_tagged_list(Byte, [{ID, Size}|_])
-		when Size >= Byte -> ID;
+find_byte_in_size_tagged_list(Byte, [{ID, TXEnd}|_])
+		when TXEnd >= Byte -> ID;
 find_byte_in_size_tagged_list(Byte, [_|Rest]) ->
 	find_byte_in_size_tagged_list(Byte, Rest).
 
@@ -153,17 +174,16 @@ is_old_poa(ChallengeBlock, BI) ->
 validate_old_poa(_, _) ->
 	error(not_implemented).
 
-validate_recall_block(ChallengeByte, ChallengeBH, POA) ->
+validate_recall_block(BlockOffset, ChallengeBH, POA) ->
 	ar:d([{poa_validation_rb, ar_util:encode(ar_weave:header_hash(POA#poa.recall_block))}, {challenge, ar_util:encode(ChallengeBH)}]),
 	case ar_weave:header_hash(POA#poa.recall_block) of
-		ChallengeBH -> validate_tx_path(ChallengeByte, POA);
+		ChallengeBH -> validate_tx_path(BlockOffset, POA);
 		_ -> false
 	end.
 
 %% If we have validated the block and the challenge byte is 0, return true.
 validate_tx_path(0, _) -> true;
-validate_tx_path(ChallengeByte, POA) ->
-	BlockOffset = ChallengeByte - (POA#poa.recall_block)#block.weave_size,
+validate_tx_path(BlockOffset, POA) ->
 	Validation =
 		ar_merkle:validate_path(
 			(POA#poa.recall_block)#block.tx_root,
@@ -194,6 +214,17 @@ validate_data_path(BlockOffset, POA) ->
 			TXOffset,
 			POA#poa.data_path
 		),
+	ar:d(
+		[
+			poa_verification,
+			{block_header_hash, ar_util:encode((POA#poa.recall_block)#block.header_hash)},
+			{tx, ar_util:encode((POA#poa.tx)#tx.id)},
+			{tx_start_offset, TXStartOffset},
+			{tx_end_offset, TXEndOffset},
+			{tx_offset, TXOffset},
+			{chunk_id, case Validation of false -> false; _ -> ar_util:encode(Validation) end}
+		]
+	),
 	case Validation of
 		false -> false;
 		ChunkID ->

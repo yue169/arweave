@@ -41,6 +41,7 @@ start(CurrentB, POA, RawTXs, RewardAddr, Tags, StaticDiff, Parent, BlockTXPairs)
 do_start(CurrentB, POA, RawTXs, unclaimed, Tags, Diff, Parent, BlockTXPairs) ->
 	do_start(CurrentB, POA, RawTXs, <<>>, Tags, Diff, Parent, BlockTXPairs);
 do_start(CurrentB, POA, RawTXs, RewardAddr, Tags, Diff, Parent, BlockTXPairs) ->
+	%ar:d([{mining_txs, RawTXs}]),
 	{NewDiff, AutoUpdateDiff} = case Diff of
 		auto_update -> {not_set, true};
 		_ -> {Diff, false}
@@ -296,8 +297,8 @@ server(
 		{solution, Hash, Nonce, MinedTXs, MinedDiff, MinedTimestamp} ->
 			ar:info(
 				[
-					{miner_found_nonce, self()},
-					{poa, POA}
+					{miner_found_nonce, self()}
+					%{poa, POA}
 				]
 			),
 			Parent ! {work_complete, CurrentBH, MinedTXs, Hash, POA, MinedDiff, Nonce, MinedTimestamp, TotalHashesTried},

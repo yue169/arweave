@@ -3,9 +3,9 @@
 -export([sign/2, sign/3, verify/5, verify_txs/5, signature_data_segment/1]).
 -export([tx_to_binary/1, tags_to_list/1]).
 -export([calculate_min_tx_cost/4, calculate_min_tx_cost/6, check_last_tx/2]).
--export([generate_data_tree/1, generate_chunk_id/1]).
--export([verify_after_mining/1]).
--export([generate_size_tagged_list_from_binary/1]).
+-export([generate_chunk_tree/1, generate_chunk_tree/2, generate_chunk_id/1]).
+-export([verify_after_mining/1, chunk_binary/2]).
+-export([chunks_to_size_tagged_chunks/1, sized_chunks_to_sized_chunk_ids/1]).
 -include("ar.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
@@ -140,6 +140,12 @@ do_verify(TX, Diff, Height, Wallets, Timestamp) ->
 		[] ->
 			true;
 		ErrorCodes ->
+			ar:d(
+				[
+					{tx_validation_failed, ar_util:encode(TX#tx.id)},
+					{reasons, ErrorCodes}
+				]
+			),
 			ar_tx_db:put_error_codes(TX#tx.id, ErrorCodes),
 			false
 	end.
@@ -290,8 +296,7 @@ verify_hash(#tx {signature = Sig, id = ID}) ->
 %% with a high enough balance, etc. Should only be used to validate TX 
 %% headers during proof of access.
 verify_after_mining(TX) ->
-	verify_hash(TX) andalso
-		ar_wallet:verify(TX#tx.owner, signature_data_segment(TX), TX#tx.signature).
+	verify_hash(TX).
 
 %% @doc Check that the structure of the txs tag field is in the expected
 %% key value format.
@@ -366,14 +371,16 @@ check_last_tx(WalletMap, TX) when is_map(WalletMap) ->
 
 %% @doc Take a transaction with a data segment and generate its chunk index, placing
 %% this in the appropriate point in the transaction record.
-generate_data_tree(TX) ->
-	ChunkIDs =
-		lists:map(
-			fun(Chunk) -> generate_chunk_id(Chunk) end,
-			chunk_binary(?DATA_CHUNK_SIZE, TX#tx.data)
-		),
-	{Root, Tree} =
-		ar_merkle:generate_tree([ {ChunkID, ?DATA_CHUNK_SIZE} || ChunkID <- ChunkIDs ]),
+generate_chunk_tree(TX) ->
+	generate_chunk_tree(TX,
+		sized_chunks_to_sized_chunk_ids(
+			chunks_to_size_tagged_chunks(
+				chunk_binary(?DATA_CHUNK_SIZE, TX#tx.data)
+			)
+		)
+	).
+generate_chunk_tree(TX, ChunkIDSizes) ->
+	{Root, Tree} = ar_merkle:generate_tree(ChunkIDSizes),
 	TX#tx { data_tree = Tree, data_root = Root }.
 
 %% @doc Generate a chunk ID according to the specification found in the TX record.
@@ -386,21 +393,23 @@ chunk_binary(ChunkSize, Bin) ->
 	<< ChunkBin:ChunkSize/binary, Rest/binary >> = Bin,
 	[ ChunkBin | chunk_binary(ChunkSize, Rest) ].
 
-generate_size_tagged_list_from_binary(Bin) ->
-	Chunks = chunk_binary(?DATA_CHUNK_SIZE, Bin),
+chunks_to_size_tagged_chunks(Chunks) ->
 	lists:reverse(
 		element(
 			2,
-			lists:foldl(
+			lists:foldr(
 				fun(Chunk, {Pos, List}) ->
-					Start = Pos + byte_size(Chunk),
-					{Start, [{Chunk, Start}|List]}
+					End = Pos + byte_size(Chunk),
+					{End, [{Chunk, End}|List]}
 				end,
 				{0, []},
 				Chunks
 			)
 		)
 	).
+
+sized_chunks_to_sized_chunk_ids(SizedChunks) ->
+	[ {ar_tx:generate_chunk_id(Chunk), Size} || {Chunk, Size} <- SizedChunks ].
 
 %%% Tests: ar_tx
 
@@ -425,7 +434,7 @@ sign_and_verify_chuncked_test() ->
 	TXData = crypto:strong_rand_bytes(trunc(?DATA_CHUNK_SIZE * 5.5)),
 	{Priv, Pub} = ar_wallet:new(),
 	UnsignedTX =
-		generate_data_tree(
+		generate_chunk_tree(
 			#tx {
 				format = 2,
 				data = TXData,

@@ -38,19 +38,19 @@ generate_tx_tree(B, SizeTaggedTXs) ->
 	{Root, Tree} = ar_merkle:generate_tree(SizeTaggedTXs),
 	B#block { tx_tree = Tree, tx_root = Root }.
 
-generate_size_tagged_list_from_txs(TXsizes) ->
+generate_size_tagged_list_from_txs(TXs) ->
 	lists:reverse(
 		element(2,
 			lists:foldl(
 				fun({TXID, Size}, {Pos, List}) ->
-					Start = Pos + Size,
-					{Start, [{TXID, Start}|List]};
+					End = Pos + Size,
+					{End, [{TXID, End}|List]};
 				   (TX, {Pos, List}) ->
-					Start = Pos + TX#tx.data_size,
-					{Start, [{TX#tx.id, Start}|List]}
+					End = Pos + TX#tx.data_size,
+					{End, [{TX#tx.id, End}|List]}
 				end,
 				{0, []},
-				TXsizes
+				TXs
 			)
 		)
 	).
