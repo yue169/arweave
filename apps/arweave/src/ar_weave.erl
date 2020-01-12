@@ -183,7 +183,11 @@ add([CurrentB|_Bs], RawTXs, BI, RewardAddr, RewardPool, WalletList, Tags, POA, D
 	NewB =
 		#block {
 			nonce = Nonce,
-			previous_block = CurrentB#block.indep_hash,
+			previous_block =
+				case NewHeight >= ?FORK_2_0 of
+					true -> CurrentB#block.header_hash;
+					false -> CurrentB#block.indep_hash
+				end,
 			timestamp = Timestamp,
 			last_retarget =
 				case ar_retarget:is_retarget_height(NewHeight) of

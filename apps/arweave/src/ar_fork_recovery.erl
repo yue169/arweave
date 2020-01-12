@@ -436,6 +436,19 @@ try_apply_block(BI, NextB, TXs, B, POA, BlockTXPairs) ->
 			FinderReward,
 			NextB#block.height
 		),
+	ar:d(
+		[
+			fork_recovery_started_with_args,
+			{block_index, BI},
+			{wallet_List, WalletList},
+			{next_b, NextB},
+			{txs, TXs},
+			{current_b, B},
+			{poa, POA},
+			{reward_addr, NextB#block.reward_addr},
+			{tags, NextB#block.tags}
+		]
+	),
 	BlockValid = ar_node_utils:validate(
 		BI,
 		WalletList,
@@ -472,26 +485,26 @@ try_apply_block(BI, NextB, TXs, B, POA, BlockTXPairs) ->
 
 %% @doc Ensure forks that are one block behind will resolve.
 one_block_ahead_recovery_test() ->
-		ar_storage:clear(),
-		Node1 = ar_node:start(),
-		Node2 = ar_node:start(),
-		B0 = ar_weave:init([]),
-		ar_storage:write_block(hd(B0)),
-		B1 = ar_weave:add(B0, []),
-		ar_storage:write_block(hd(B1)),
-		B2 = ar_weave:add(B1, []),
-		ar_storage:write_block(hd(B2)),
-		B3 = ar_weave:add(B2, []),
-		ar_storage:write_block(hd(B3)),
-		Node1 ! Node2 ! {replace_block_list, B3},
-		timer:sleep(500),
-		ar_node:mine(Node1),
-		timer:sleep(500),
-		ar_node:add_peers(Node1, Node2),
-		ar_node:mine(Node1),
-		timer:sleep(1000),
-		?assertEqual(block_hashes_by_node(Node1), block_hashes_by_node(Node2)),
-		?assertEqual(6, length(block_hashes_by_node(Node2))).
+	ar_storage:clear(),
+	Node1 = ar_node:start(),
+	Node2 = ar_node:start(),
+	B0 = ar_weave:init([]),
+	ar_storage:write_block(hd(B0)),
+	B1 = ar_weave:add(B0, []),
+	ar_storage:write_block(hd(B1)),
+	B2 = ar_weave:add(B1, []),
+	ar_storage:write_block(hd(B2)),
+	B3 = ar_weave:add(B2, []),
+	ar_storage:write_block(hd(B3)),
+	Node1 ! Node2 ! {replace_block_list, B3},
+	timer:sleep(500),
+	ar_node:mine(Node1),
+	timer:sleep(500),
+	ar_node:add_peers(Node1, Node2),
+	ar_node:mine(Node1),
+	timer:sleep(1000),
+	?assertEqual(block_hashes_by_node(Node1), block_hashes_by_node(Node2)),
+	?assertEqual(6, length(block_hashes_by_node(Node2))).
 
 %% @doc Ensure forks that are three block behind will resolve.
 three_block_ahead_recovery_test() ->

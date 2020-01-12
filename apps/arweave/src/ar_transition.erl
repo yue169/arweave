@@ -44,7 +44,7 @@ do_generate_checkpoint([H|HL], [], BI) ->
                 [ar_utils:encode(H)]),
             error;
         true ->
-            BWithTree = ar_block:generate_tx_tree(RawB),
+            BWithTree = ar_block:generate_tx_tree(RawB#block { txs = ar_storage:read_tx(RawB#block.txs) }),
             B = BWithTree#block { header_hash = ar_weave:header_hash(BWithTree) },
             ar_storage:write_block(B),
             [{B#block.header_hash, B#block.weave_size}|do_generate_checkpoint(HL, [], BI)]

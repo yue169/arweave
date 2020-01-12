@@ -199,30 +199,31 @@ update_data_segment(
 	update_data_segment(S, TXs, BlockTimestamp, Diff).
 
 update_data_segment(S, TXs, BlockTimestamp, Diff) ->
-	{DurationMicros, {NewBDSPieces, BDS}} = case S#state.bds_pieces of
-		not_generated ->
-			timer:tc(fun() ->
-				ar_block:generate_block_data_segment_and_pieces(
-					S#state.current_block,
-					S#state.poa,
-					TXs,
-					S#state.reward_addr,
-					BlockTimestamp,
-					S#state.tags
-				)
-			end);
-		BDSPieces ->
-			timer:tc(fun() ->
-				ar_block:refresh_block_data_segment_timestamp(
-					BDSPieces,
-					S#state.current_block,
-					S#state.poa,
-					TXs,
-					S#state.reward_addr,
-					BlockTimestamp
-				)
-			end)
-	end,
+	{DurationMicros, {NewBDSPieces, BDS}} =
+		case S#state.bds_pieces of
+			not_generated ->
+				timer:tc(fun() ->
+					ar_block:generate_block_data_segment_and_pieces(
+						S#state.current_block,
+						S#state.poa,
+						TXs,
+						S#state.reward_addr,
+						BlockTimestamp,
+						S#state.tags
+					)
+				end);
+			BDSPieces ->
+				timer:tc(fun() ->
+					ar_block:refresh_block_data_segment_timestamp(
+						BDSPieces,
+						S#state.current_block,
+						S#state.poa,
+						TXs,
+						S#state.reward_addr,
+						BlockTimestamp
+					)
+				end)
+		end,
 	NewS = S#state {
 		timestamp = BlockTimestamp,
 		diff = Diff,

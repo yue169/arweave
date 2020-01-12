@@ -61,12 +61,16 @@ generate_block_index_for_block(_Block0IndepHash, []) -> [];
 generate_block_index_for_block(B, CurrentB) when ?IS_BLOCK(CurrentB) ->
 	generate_block_index_for_block(B, CurrentB#block.indep_hash);
 generate_block_index_for_block(B, BI) when ?IS_BLOCK(B) ->
-	generate_block_index_for_block(B#block.indep_hash, BI);
-generate_block_index_for_block(IndepHash, BI) ->
-	do_generate_block_index_for_block(IndepHash, BI).
+	case generate_block_index_for_block(B#block.indep_hash, BI) of
+		undefined ->
+			generate_block_index_for_block(B#block.header_hash, BI);
+		Else -> Else
+	end;
+generate_block_index_for_block(Hash, BI) ->
+	do_generate_block_index_for_block(Hash, BI).
 
 do_generate_block_index_for_block(_, []) ->
-	error(cannot_generate_block_block_index);
+	undefined;
 do_generate_block_index_for_block(IndepHash, [{IndepHash, _}|BI]) -> BI;
 do_generate_block_index_for_block(IndepHash, [_|Rest]) ->
 	do_generate_block_index_for_block(IndepHash, Rest).
@@ -553,6 +557,8 @@ verify_last_retarget(NewB, OldB) ->
 
 %% @doc Verify that the previous_block hash of the new block is the indep_hash
 %% of the current block.
+verify_previous_block(NewB, OldB) when NewB#block.height >= ?FORK_2_0 ->
+	OldB#block.header_hash == NewB#block.previous_block;
 verify_previous_block(NewB, OldB) ->
 	OldB#block.indep_hash == NewB#block.previous_block.
 

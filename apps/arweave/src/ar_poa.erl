@@ -133,7 +133,6 @@ search(X, [_|R]) -> 1 + search(X, R).
 
 %% @doc Validate a complete proof of access object.
 validate(LastHeaderHash, WeaveSize, BI, RawPOA) ->
-	ar:d([{poa_validation_block_indexes, [ {ar_util:encode(BH), WVSZ} || {BH, WVSZ} <- BI ]}]),
 	POA = RawPOA#poa { recall_block = ar_storage:read_block(RawPOA#poa.recall_block, BI)}, 
 	ChallengeByte = calculate_challenge_byte(LastHeaderHash, WeaveSize, POA#poa.option),
 	{ChallengeBlock, BlockBase} = find_challenge_block(ChallengeByte, BI),
@@ -201,7 +200,7 @@ validate_data_path(BlockOffset, POA) ->
 			TXOffset,
 			POA#poa.data_path
 		),
-	ar:d(
+	ar:info(
 		[
 			poa_verification,
 			{block_header_hash, ar_util:encode((POA#poa.recall_block)#block.header_hash)},

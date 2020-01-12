@@ -600,6 +600,7 @@ validate(
 		RewardAddr,
 		Tags
 	) when Height >= ?FORK_2_0 ->
+	ar:d([performing_v2_block_validation, {height, Height}]),
 	POW = ar_weave:hash(
 		ar_block:generate_block_data_segment(OldB, POA, TXs, RewardAddr, Timestamp, Tags),
 		Nonce,
@@ -675,6 +676,7 @@ validate(
 		RecallB,
 		RewardAddr,
 		Tags) ->
+	ar:d([performing_v1_block_validation, {height, Height}]),
 	% TODO: Fix names.
 	BDSHash = ar_weave:hash(
 		ar_block:generate_block_data_segment(OldB, RecallB, TXs, RewardAddr, Timestamp, Tags),
