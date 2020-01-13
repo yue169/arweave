@@ -47,13 +47,13 @@
 		ar_weave,
 		ar_join,
 		ar_node_tests,
-		ar_fork_recovery
+		ar_fork_recovery,
 		ar_firewall_distributed_tests,
 		ar_firewall,
 		ar_mine,
 		ar_tx_replay_pool_tests,
 		ar_tx_queue,
-		ar_http_iface_tests
+		ar_http_iface_tests,
 		ar_multiple_txs_per_wallet_tests,
 		ar_tx_perpetual_storage_tests,
 		ar_gateway_middleware_tests,
