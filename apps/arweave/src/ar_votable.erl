@@ -29,6 +29,12 @@ properties() ->
             max_up = 0.01,
             max_down = 0.02,
             default = ?TO_INT(1000)
+        },
+        #property {
+            name = "max_proof_length",
+            max_up = 0.05,
+            max_down = 0.05,
+            default = ?TO_INT(?MAX_PATH_SIZE)
         }
     ].
 

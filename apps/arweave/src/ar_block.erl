@@ -262,6 +262,7 @@ block_field_size_limit(B) ->
 				};
 			_ -> {0, 0, 0}
 		end,
+	MaxProofSize = erlang:trunc(ar_votable:get("max_proof_length", B)),
 	Check = (byte_size(B#block.nonce) =< 512) and
 		(byte_size(B#block.previous_block) =< 48) and
 		(byte_size(integer_to_binary(B#block.timestamp)) =< 12) and
@@ -275,8 +276,8 @@ block_field_size_limit(B) ->
 		(byte_size(integer_to_binary(B#block.weave_size)) =< 64) and
 		(byte_size(integer_to_binary(B#block.block_size)) =< 64) and
 		(ChunkSize =< ?DATA_CHUNK_SIZE) and
-		(TXPathSize =< ?MAX_PATH_SIZE) and
-		(DataPathSize =< ?MAX_PATH_SIZE),
+		(TXPathSize =< MaxProofSize) and
+		(DataPathSize =< MaxProofSize),
 	% Report of wrong field size.
 	case Check of
 		false ->
