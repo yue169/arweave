@@ -95,6 +95,9 @@ handle_cast(init_stored_height_hash_index, State) ->
 	{noreply, State#{ stored_height_hash_index => DB }};
 
 handle_cast({store_height_hash_index, {Key, Value}}, #{ stored_height_hash_index := DB } = State) ->
+	{ok, Iterator} = rocksdb:iterator(DB, []),
+	Seek = rocksdb:iterator_move(Iterator, {seek, Key}),
+	remove_orphaned_height_hash_index(Seek, Iterator, DB),
 	rocksdb:put(DB, Key, Value, []),
 	{noreply, State};
 
@@ -445,3 +448,22 @@ get_till_height({ok, H, _}) ->
 	integer_to_binary(binary_to_integer(H) - ?STORE_BLOCKS_BEHIND_CURRENT);
 get_till_height(_) ->
 	<<>>.
+
+remove_orphaned_height_hash_index({error,invalid_iterator}, _, _) ->
+	ok;
+remove_orphaned_height_hash_index({ok, Key, BH}, Iterator, DB) ->
+	case ar_storage:lookup_block_filename(BH) of
+		unavailable ->
+			rocksdb:delete(DB, Key, []),
+			remove_orphaned_height_hash_index(rocksdb:iterator_move(Iterator, next), Iterator, DB);
+		BlockPath ->
+			case ar_storage:read_block(BH) of
+				unavailable ->
+					rocksdb:delete(DB, Key, []),
+					remove_orphaned_height_hash_index(rocksdb:iterator_move(Iterator, next), Iterator, DB);
+				Block ->
+					cleanup_all(BlockPath, Block),
+					rocksdb:delete(DB, Key, []),
+					remove_orphaned_height_hash_index(rocksdb:iterator_move(Iterator, next), Iterator, DB)
+			end
+		end.
