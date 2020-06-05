@@ -39,8 +39,8 @@ enqueue_random(Item) ->
 reset() ->
 	gen_server:cast(?MODULE, reset).
 
-store_height_hash_index(#block{ height = Height, hash = Hash }) ->
-	gen_server:cast(?MODULE, {store_height_hash_index, {integer_to_binary(Height), Hash}}),
+store_height_hash_index(#block{ height = Height, indep_hash = IH }) ->
+	gen_server:cast(?MODULE, {store_height_hash_index, {integer_to_binary(Height), IH}}),
 	ok;
 store_height_hash_index(_) ->
 	{error, invalid_block}.
@@ -106,6 +106,12 @@ handle_cast(reset, State) ->
 
 handle_call(get_stored_height_hash_index, _, #{ stored_height_hash_index := DB } = State) ->
 	{reply, DB, State};
+
+handle_call({remove_orphaned_height_hash_index, #block{ height = Height }}, _, #{ stored_height_hash_index := DB } = State) ->
+	{ok, Iterator} = rocksdb:iterator(DB, []),
+	Seek = rocksdb:iterator_move(Iterator, {seek, integer_to_binary(Height)}),
+	remove_orphaned_height_hash_index(Seek, Iterator, DB),
+	{reply, ok, State};
 
 handle_call(_, _, State) ->
 	{reply, not_implemented, State}.
@@ -431,7 +437,13 @@ cleanup_all(BlockPath, #block{ txs = TXs, wallet_list_hash = WalletListHash }) -
 	TXsSum + WalletBlockSum.
 
 is_full_disk() ->
-	ar_meta_db:get(used_space) + (100 * 1024 * 1024) >= ar_meta_db:get(disk_space).
+	{US, DS} = case {ar_meta_db:get(used_space), ar_meta_db:get(disk_space)} of
+		{not_found, not_found} ->
+			{0, 0};
+		Res ->
+			Res
+	end,
+	US + (100 * 1024 * 1024) >= DS.
 
 maybe_store_height_hash_index(DB) ->
 	case rocksdb:is_empty(DB) of
@@ -445,13 +457,14 @@ maybe_store_height_hash_index(DB) ->
 	end.
 
 get_till_height({ok, H, _}) ->
-	integer_to_binary(binary_to_integer(H) - ?STORE_BLOCKS_BEHIND_CURRENT);
+	integer_to_binary(binary_to_integer(H) - ?STORE_BLOCKS_BEHIND);
 get_till_height(_) ->
 	<<>>.
 
 remove_orphaned_height_hash_index({error,invalid_iterator}, _, _) ->
 	ok;
 remove_orphaned_height_hash_index({ok, Key, BH}, Iterator, DB) ->
+
 	case ar_storage:lookup_block_filename(BH) of
 		unavailable ->
 			rocksdb:delete(DB, Key, []),
