@@ -56,8 +56,8 @@ init(_Args) ->
 	%% heap and do not perform expensive GC on them.
 	process_flag(message_queue_data, off_heap),
 	gen_server:cast(?MODULE, process_item),
-	%gen_server:cast(?MODULE, init_stored_height_hash_index),
-%	gen_server:cast(?MODULE, cleanup),
+	gen_server:cast(?MODULE, init_stored_height_hash_index),
+	gen_server:cast(?MODULE, cleanup),
 	{ok, #{ queue => queue:new() }}.
 
 handle_cast({enqueue_front, Item}, #{ queue := Queue } = State) ->
