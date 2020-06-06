@@ -40,7 +40,7 @@ reset() ->
 	gen_server:cast(?MODULE, reset).
 
 store_height_hash_index(#block{ height = Height, indep_hash = IH }) ->
-	gen_server:cast(?MODULE, {store_height_hash_index, {integer_to_binary(Height), IH}}),
+	gen_server:call(?MODULE, {store_height_hash_index, {integer_to_binary(Height), IH}}),
 	ok;
 store_height_hash_index(_) ->
 	{error, invalid_block}.
@@ -56,8 +56,8 @@ init(_Args) ->
 	%% heap and do not perform expensive GC on them.
 	process_flag(message_queue_data, off_heap),
 	gen_server:cast(?MODULE, process_item),
-	gen_server:cast(?MODULE, init_stored_height_hash_index),
-	gen_server:cast(?MODULE, cleanup),
+	%gen_server:cast(?MODULE, init_stored_height_hash_index),
+%	gen_server:cast(?MODULE, cleanup),
 	{ok, #{ queue => queue:new() }}.
 
 handle_cast({enqueue_front, Item}, #{ queue := Queue } = State) ->
@@ -94,15 +94,15 @@ handle_cast(init_stored_height_hash_index, State) ->
 	ok = maybe_store_height_hash_index(DB),
 	{noreply, State#{ stored_height_hash_index => DB }};
 
-handle_cast({store_height_hash_index, {Key, Value}}, #{ stored_height_hash_index := DB } = State) ->
+handle_cast(reset, State) ->
+	{noreply, State#{ queue => queue:new() }}.
+
+handle_call({store_height_hash_index, {Key, Value}}, _, #{ stored_height_hash_index := DB } = State) ->
 	{ok, Iterator} = rocksdb:iterator(DB, []),
 	Seek = rocksdb:iterator_move(Iterator, {seek, Key}),
 	remove_orphaned_height_hash_index(Seek, Iterator, DB),
 	rocksdb:put(DB, Key, Value, []),
-	{noreply, State};
-
-handle_cast(reset, State) ->
-	{noreply, State#{ queue => queue:new() }}.
+	{reply, ok, State};
 
 handle_call(get_stored_height_hash_index, _, #{ stored_height_hash_index := DB } = State) ->
 	{reply, DB, State};
@@ -464,7 +464,6 @@ get_till_height(_) ->
 remove_orphaned_height_hash_index({error,invalid_iterator}, _, _) ->
 	ok;
 remove_orphaned_height_hash_index({ok, Key, BH}, Iterator, DB) ->
-
 	case ar_storage:lookup_block_filename(BH) of
 		unavailable ->
 			rocksdb:delete(DB, Key, []),

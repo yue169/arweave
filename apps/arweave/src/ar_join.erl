@@ -214,16 +214,16 @@ join_peers(Peer) -> ar_http_iface_client:add_peer(Peer).
 get_block_and_trail(_Peers, NewB, []) ->
 	%% Joining on the genesis block.
 	TXIDs = [TX#tx.id || TX <- NewB#block.txs],
-	ar_storage:write_block(NewB#block{ txs = TXIDs }),
 	ar_downloader:store_height_hash_index(NewB),
+	ar_storage:write_block(NewB#block{ txs = TXIDs }),
 	[{NewB#block.indep_hash, ar_block:generate_size_tagged_list_from_txs(NewB#block.txs)}];
 get_block_and_trail(Peers, NewB, BI) ->
 	get_block_and_trail(Peers, NewB, 2 * ?MAX_TX_ANCHOR_DEPTH, BI, []).
 
 get_block_and_trail(_Peers, NewB, _BehindCurrent, _BI, BlockTXPairs)
 		when NewB#block.height == 0 ->
-	ar_storage:write_full_block(NewB),
 	ar_downloader:store_height_hash_index(NewB),
+	ar_storage:write_full_block(NewB),
 	SizeTaggedTXs = ar_block:generate_size_tagged_list_from_txs(NewB#block.txs),
 	BlockTXPairs ++ [{NewB#block.indep_hash, SizeTaggedTXs}];
 get_block_and_trail(_, NewB, 0, _, BlockTXPairs) ->
@@ -237,8 +237,8 @@ get_block_and_trail(Peers, NewB, BehindCurrent, BI, BlockTXPairs) ->
 	),
 	case ?IS_BLOCK(PreviousBlock) of
 		true ->
-			ar_storage:write_full_block(NewB),
 			ar_downloader:store_height_hash_index(NewB),
+			ar_storage:write_full_block(NewB),
 			SizeTaggedTXs = ar_block:generate_size_tagged_list_from_txs(NewB#block.txs),
 			NewBlockTXPairs = BlockTXPairs ++ [{NewB#block.indep_hash, SizeTaggedTXs}],
 			ar:info(

@@ -280,13 +280,13 @@ apply_next_block(State, NextB, B) ->
 					{block_height, NextB#block.height}
 				]
 			),
+			ar_downloader:store_height_hash_index(NextB),
 			ar_storage:write_full_block(NextB),
 			NewBI = ar_node_utils:update_block_index(NextB, BI),
 			SizeTaggedTXs = ar_block:generate_size_tagged_list_from_txs(NextB#block.txs),
 			BH = NextB#block.indep_hash,
 			NewBlockTXPairs =
 				ar_node_utils:update_block_txs_pairs(BH, SizeTaggedTXs, BlockTXPairs),
-			ar_downloader:store_height_hash_index(NextB),
 			lists:foreach(
 				fun(TX) ->
 					ar_downloader:enqueue_random({tx_data, TX}),
