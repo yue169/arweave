@@ -57,6 +57,7 @@ init(_Args) ->
 	process_flag(message_queue_data, off_heap),
 	gen_server:cast(?MODULE, process_item),
 	gen_server:cast(?MODULE, init_stored_height_hash_index),
+	gen_server:cast(?MODULE, stored_block_index),
 	gen_server:cast(?MODULE, cleanup),
 	{ok, #{ queue => queue:new() }}.
 
@@ -91,27 +92,33 @@ handle_cast(init_stored_height_hash_index, State) ->
 	Filename = filename:join(RocksDBDir, Name),
 	ok = filelib:ensure_dir(Filename ++ "/"),
 	{ok, DB} = rocksdb:open(Filename, [{create_if_missing, true}, {max_open_files, 100000}]),
-	ok = maybe_store_height_hash_index(DB),
 	{noreply, State#{ stored_height_hash_index => DB }};
+
+handle_cast(stored_block_index, #{ stored_height_hash_index := DB } = State) ->
+	case ar_node:get_block_index(whereis(http_entrypoint_node)) of
+		[] ->
+			timer:apply_after(500, gen_server, cast, [?MODULE, stored_block_index]);
+		BI ->
+			lists:foreach(fun({BH, _, _}) ->
+				case ar_storage:read_block(BH) of
+					#block{ height = Height, indep_hash = IH } ->
+						rocksdb:put(DB, integer_to_binary(Height), IH, []);
+					_ ->
+						ok
+				end
+			end, BI)
+	end,
+	{noreply, State};
 
 handle_cast(reset, State) ->
 	{noreply, State#{ queue => queue:new() }}.
 
 handle_call({store_height_hash_index, {Key, Value}}, _, #{ stored_height_hash_index := DB } = State) ->
-	{ok, Iterator} = rocksdb:iterator(DB, []),
-	Seek = rocksdb:iterator_move(Iterator, {seek, Key}),
-	remove_orphaned_height_hash_index(Seek, Iterator, DB),
 	rocksdb:put(DB, Key, Value, []),
 	{reply, ok, State};
 
 handle_call(get_stored_height_hash_index, _, #{ stored_height_hash_index := DB } = State) ->
 	{reply, DB, State};
-
-handle_call({remove_orphaned_height_hash_index, #block{ height = Height }}, _, #{ stored_height_hash_index := DB } = State) ->
-	{ok, Iterator} = rocksdb:iterator(DB, []),
-	Seek = rocksdb:iterator_move(Iterator, {seek, integer_to_binary(Height)}),
-	remove_orphaned_height_hash_index(Seek, Iterator, DB),
-	{reply, ok, State};
 
 handle_call(_, _, State) ->
 	{reply, not_implemented, State}.
@@ -445,37 +452,7 @@ is_full_disk() ->
 	end,
 	US + (100 * 1024 * 1024) >= DS.
 
-maybe_store_height_hash_index(DB) ->
-	case rocksdb:is_empty(DB) of
-		true ->
-			BI = ar_node:get_block_index(whereis(http_entrypoint_node)),
-			lists:foreach(fun({BH, _, _}) ->
-				store_height_hash_index(ar_storage:read_block(BH))
-			end, BI);
-		false ->
-			ok
-	end.
-
-get_till_height({ok, H, _}) ->
-	integer_to_binary(binary_to_integer(H) - ?STORE_BLOCKS_BEHIND);
+get_till_height({ok, Height, _}) ->
+	integer_to_binary(binary_to_integer(Height) - ?STORE_BLOCKS_BEHIND);
 get_till_height(_) ->
 	<<>>.
-
-remove_orphaned_height_hash_index({error,invalid_iterator}, _, _) ->
-	ok;
-remove_orphaned_height_hash_index({ok, Key, BH}, Iterator, DB) ->
-	case ar_storage:lookup_block_filename(BH) of
-		unavailable ->
-			rocksdb:delete(DB, Key, []),
-			remove_orphaned_height_hash_index(rocksdb:iterator_move(Iterator, next), Iterator, DB);
-		BlockPath ->
-			case ar_storage:read_block(BH) of
-				unavailable ->
-					rocksdb:delete(DB, Key, []),
-					remove_orphaned_height_hash_index(rocksdb:iterator_move(Iterator, next), Iterator, DB);
-				Block ->
-					cleanup_all(BlockPath, Block),
-					rocksdb:delete(DB, Key, []),
-					remove_orphaned_height_hash_index(rocksdb:iterator_move(Iterator, next), Iterator, DB)
-			end
-		end.

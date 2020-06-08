@@ -183,7 +183,7 @@ handle(SPid, {replace_block_list, [Block | _] = Blocks}) ->
 	BI = lists:map(fun ar_util:block_index_entry_from_block/1, Blocks),
 	BlockTXPairs = lists:map(
 		fun(B) ->
-			%ar_downloader:store_height_hash_index(B),
+			ar_downloader:store_height_hash_index(B),
 			SizeTaggedTXs = ar_block:generate_size_tagged_list_from_txs(B#block.txs),
 			{B#block.indep_hash, SizeTaggedTXs}
 		end,
@@ -736,7 +736,7 @@ recovered_from_fork(#{ block_index := not_joined } = StateIn, BI, BlockTXPairs, 
 		lists:sublist(BI, ?TRACK_CONFIRMATIONS),
 		NewB#block.weave_size - NewB#block.block_size
 	),
-	%ar_downloader:store_height_hash_index(NewB),
+	ar_downloader:store_height_hash_index(NewB),
 	{ok, ar_node_utils:reset_miner(
 		StateIn#{
 			block_index          => BI,
@@ -798,7 +798,7 @@ do_recovered_from_fork(StateIn, NewB, BI, BlockTXPairs, BaseH) ->
 		end,
 		lists:reverse(AppliedBlockTXPairs)
 	),
-	%ar_downloader:store_height_hash_index(NewB),
+	ar_downloader:store_height_hash_index(NewB),
 	{ok, ar_node_utils:reset_miner(
 		StateIn#{
 			block_index          => BI,

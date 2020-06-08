@@ -31,7 +31,6 @@ test_cleanup() ->
 	DS = ar_meta_db:get(disk_space),
 	_ = ar_meta_db:put(used_space, 0),
 	_ = ar_meta_db:put(disk_space, 0),
-	%gen_server:call(ar_downloader, {remove_orphaned_height_hash_index, hd(Blocks)}),
 	gen_server:cast(ar_downloader, cleanup),
 	timer:sleep(100),
 	_ = ar_meta_db:put(used_space, US),
