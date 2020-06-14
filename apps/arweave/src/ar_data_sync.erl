@@ -12,6 +12,7 @@
 	maybe_drop_data_root_from_disk_pool/3,
 	get_chunk/1,
 	get_tx_data/1,
+	delete_tx_data/1,
 	get_tx_offset/1,
 	get_sync_record_etf/0,
 	get_sync_record_json/0,
@@ -98,6 +99,9 @@ get_chunk(Offset) ->
 
 get_tx_data(TXID) ->
 	gen_server:call(?MODULE, {get_tx_data, TXID}).
+
+delete_tx_data(TXID) ->
+	gen_server:call(?MODULE, {delete_tx_data, TXID}).
 
 get_tx_offset(TXID) ->
 	gen_server:call(?MODULE, {get_tx_offset, TXID}).
@@ -620,6 +624,34 @@ handle_call({get_tx_data, TXID}, _From, State) ->
 			end
 	end;
 
+handle_call({delete_tx_data, TXID}, _From, State) ->
+	#sync_data_state{
+		tx_index = TXIndex,
+		chunks_index = ChunksIndex
+	} = State,
+	case ar_kv:get(TXIndex, TXID) of
+		not_found ->
+			{reply, {error, not_found}, State};
+		{error, Reason} ->
+			ar:err([{event, failed_to_delete_tx_data}, {reason, Reason}]),
+			{reply, {error, failed_to_delete_tx_data}, State};
+		{ok, Value} ->
+			{Offset, Size} = binary_to_term(Value),
+			StartKey = << (Offset - Size):?OFFSET_KEY_BITSIZE >>,
+			EndKey = << Offset:?OFFSET_KEY_BITSIZE >>,
+			case ar_kv:delete_range(ChunksIndex, StartKey, EndKey) of
+				ok ->
+					ar_kv:delete(TXIndex, TXID),
+					{reply, ok, State};
+				{error, Reason} = Res ->
+					ar:err([
+						{event, failed_to_delete_chunks_for_tx_data},
+						{reason, Reason}
+					]),
+					{reply, Res, State}
+			end
+	end;
+
 handle_call({get_tx_offset, TXID}, _From, State) ->
 	#sync_data_state{
 		tx_index = TXIndex
@@ -815,7 +847,7 @@ data_root_offset_index_from_reversed_block_index(
 			Error
 	end;
 data_root_offset_index_from_reversed_block_index(_Index, [], _StartOffset) ->
-	ok.	
+	ok.
 
 remove_orphaned_data(State, BlockStartOffset, WeaveSize) ->
 	ok = remove_orphaned_txs(State, BlockStartOffset, WeaveSize),
@@ -896,7 +928,7 @@ remove_orphaned_data_roots(State, BlockStartOffset) ->
 				end,
 				{ok, sets:new()},
 				Map
-			);	
+			);
 		Error ->
 			Error
 	end.

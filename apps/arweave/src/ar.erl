@@ -62,6 +62,7 @@
 		ar_gateway_middleware_tests,
 		ar_http_util_tests,
 		ar_mine_randomx_tests,
+		ar_content_policy_provider_tests,
 		% ar_meta_db must be the last in the list since it resets global configuration
 		ar_meta_db
 	]
@@ -261,6 +262,8 @@ parse_cli_args(["max_disk_pool_buffer_mb", Num | Rest], C) ->
 	parse_cli_args(Rest, C#config { max_disk_pool_buffer_mb = list_to_integer(Num) });
 parse_cli_args(["max_disk_pool_data_root_buffer_mb", Num | Rest], C) ->
 	parse_cli_args(Rest, C#config { max_disk_pool_data_root_buffer_mb = list_to_integer(Num) });
+parse_cli_args(["content_policy_provider_url", URL|Rest], C = #config { content_policy_provider_urls = URLs }) ->
+	parse_cli_args(Rest, C#config { content_policy_provider_urls = [URL|URLs] });
 parse_cli_args([Arg|_Rest], _O) ->
 	io:format("~nUnknown argument: ~s.~n", [Arg]),
 	show_help().
@@ -315,7 +318,8 @@ start(
 		max_poa_option_depth = MaxPOAOptionDepth,
 		disk_pool_data_root_expiration_time = DiskPoolExpirationTime,
 		max_disk_pool_buffer_mb = MaxDiskPoolBuffer,
-		max_disk_pool_data_root_buffer_mb = MaxDiskPoolDataRootBuffer
+		max_disk_pool_data_root_buffer_mb = MaxDiskPoolDataRootBuffer,
+		content_policy_provider_urls = ContentPolicyProviderUrls
 	}) ->
 	%% Start the logging system.
 	filelib:ensure_dir(?LOG_DIR ++ "/"),
@@ -350,6 +354,7 @@ start(
 	ar_meta_db:put(disk_pool_data_root_expiration_time_us, DiskPoolExpirationTime * 1000000),
 	ar_meta_db:put(max_disk_pool_buffer_mb, MaxDiskPoolBuffer),
 	ar_meta_db:put(max_disk_pool_data_root_buffer_mb, MaxDiskPoolDataRootBuffer),
+	ar_meta_db:put(content_policy_provider_urls, ContentPolicyProviderUrls),
 	%% Prepare the storage for operation.
 	ar_storage:start(),
 	%% Optionally clear the block cache.
@@ -369,6 +374,7 @@ start(
 	ar_miner_log:start(),
 	{ok, _} = ar_arql_db_sup:start_link([{data_dir, DataDir}]),
 	ar_storage:start_update_used_space(),
+	{ok, _} = ar_content_policy_provider_sup:start_link(),
 	%% Determine the mining address.
 	case {Addr, LoadKey, NewKey} of
 		{false, false, false} ->
