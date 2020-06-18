@@ -639,13 +639,19 @@ handle_call({delete_tx_data, TXID}, _From, State) ->
 			{Offset, Size} = binary_to_term(Value),
 			StartKey = << (Offset - Size):?OFFSET_KEY_BITSIZE >>,
 			EndKey = << Offset:?OFFSET_KEY_BITSIZE >>,
+			case ar_kv:get_range(ChunksIndex, StartKey, EndKey) of
+				{ok, Map} ->
+					delete_tx_data_from_chunks(Offset, Size, Map);
+				{error, _} ->
+					ok
+			end,
 			case ar_kv:delete_range(ChunksIndex, StartKey, EndKey) of
 				ok ->
 					ar_kv:delete(TXIndex, TXID),
 					{reply, ok, State};
 				{error, Reason} = Res ->
 					ar:err([
-						{event, failed_to_delete_chunks_for_tx_data},
+						{event, failed_to_delete_tx_data},
 						{reason, Reason}
 					]),
 					{reply, Res, State}
@@ -1453,6 +1459,22 @@ get_tx_data_from_chunks(Offset, Size, Map, Data) ->
 				{ok, {Chunk, _}} ->
 					get_tx_data_from_chunks(
 						Offset - ChunkSize, Size - ChunkSize, Map, [Chunk | Data])
+			end
+	end.
+
+delete_tx_data_from_chunks(_, 0, _) ->
+	ok;
+delete_tx_data_from_chunks(Offset, Size, Map) ->
+	case maps:get(<< Offset:?OFFSET_KEY_BITSIZE >>, Map, not_found) of
+		not_found ->
+			ok;
+		Value ->
+			{DataPathHash, _, _, _, _, ChunkSize} = binary_to_term(Value),
+			case ar_storage:delete_chunk(DataPathHash) of
+				ok ->
+					delete_tx_data_from_chunks(Offset - ChunkSize, Size - ChunkSize, Map);
+				{error, Reason} ->
+					ar:err([{event, failed_to_delete_chunk_of_tx_data}, {reason, Reason}])
 			end
 	end.
 

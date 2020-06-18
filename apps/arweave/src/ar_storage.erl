@@ -314,7 +314,12 @@ write_tx(#tx{ format = 2 } = TX) ->
 				true ->
 					case DataSize == TX#tx.data_size of
 						true ->
-							write_tx_data(TX#tx.data_root, TX#tx.data);
+							case is_can_write_tx(TX#tx.id) of
+								true ->
+									write_tx_data(TX#tx.data_root, TX#tx.data);
+								false ->
+									ar:err([{event, failed_to_store_tx}, {reason, content_policy_provider_tx_ids}])
+							end;
 						false ->
 							ar:err([{event, failed_to_store_v2_data}, {reason, size_mismatch}])
 					end;
@@ -707,6 +712,14 @@ read_term(Dir, Name) ->
 delete_term(Name) ->
 	DataDir = ar_meta_db:get(data_dir),
 	file:delete(filename:join(DataDir, atom_to_list(Name))).
+
+is_can_write_tx(ID) ->
+	case ar_meta_db:get(content_policy_provider_tx_ids) of
+		not_found ->
+			true;
+		IDs ->
+			lists:member(ID, IDs)
+	end.
 
 %% @doc Test block storage.
 store_and_retrieve_block_test() ->

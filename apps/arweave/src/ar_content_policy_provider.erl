@@ -73,7 +73,13 @@ process_policy_content([URL|T]) ->
 			case ar_http:req(Opts) of
 				{ok, {{_ ,_}, _, Data, _, _}} ->
 					binary:split(Data, <<"\n">>, [global]),
-					process_policy_content_txs(binary:split(Data, <<"\n">>, [global]));
+					BlacklistTxIDs = process_policy_content_txs(binary:split(Data, <<"\n">>, [global]), []),
+					case ar_meta_db:get(content_policy_provider_tx_ids) of
+						not_found ->
+							ar_meta_db:put(content_policy_provider_tx_ids, BlacklistTxIDs);
+						IDs ->
+							ar_meta_db:put(content_policy_provider_tx_ids, lists:usort(BlacklistTxIDs ++ IDs))
+					end;
 				InvalidResponse ->
 					ar:err([{event, process_policy_content_request}, {url, URL}, {response, InvalidResponse}])
 			end;
@@ -87,17 +93,17 @@ build_req_headers([]) ->
 build_req_headers(UserInfo) ->
 	[{<<"Authorization">>, <<"Basic ", (base64:encode(UserInfo))/binary>>}].
 
-process_policy_content_txs([]) ->
-	ok;
-process_policy_content_txs([<<>>|T]) ->
-	process_policy_content_txs(T);
-process_policy_content_txs([ID|T]) ->
+process_policy_content_txs([], Acc) ->
+	Acc;
+process_policy_content_txs([<<>>|T], Acc) ->
+	process_policy_content_txs(T, Acc);
+process_policy_content_txs([ID|T], Acc) ->
 	TrimID = re:replace(ID, "[\s\t\r\n]", "", [{return, binary}, global]),
 	case catch ar_util:decode(TrimID) of
 		DecID when is_binary(DecID) ->
 			ar_data_sync:delete_tx_data(DecID),
 			ar_storage:delete_tx(DecID),
-			process_policy_content_txs(T);
+			process_policy_content_txs(T, [DecID|Acc]);
 		_ ->
-			process_policy_content_txs(T)
+			process_policy_content_txs(T, Acc)
 	end.
