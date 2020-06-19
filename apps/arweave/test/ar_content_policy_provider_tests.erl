@@ -14,13 +14,12 @@ removes_blacklisted_txs() ->
 	Key1 = {_, Pub1} = ar_wallet:new(),
 	Key2 = {_, Pub2} = ar_wallet:new(),
 	Key3 = {_, Pub3} = ar_wallet:new(),
-	Addr = ar_wallet:to_address(Pub1),
+	GoodTX = sign_tx(Key1, #{data => <<>>}),
 	ToDelTX1 = sign_tx(Key2, #{data => <<>>}),
 	ToDelTX2 = sign_tx(Key3, #{data => <<>>}),
 	Data = <<(ar_util:encode(ToDelTX1#tx.id))/binary, "\n", (ar_util:encode(ToDelTX2#tx.id))/binary>>,
 	URL = pastebin(Data),
-	GoodTX = sign_tx(Key1, #{tags => [], data => <<>>}),
-	[Block] = ar_weave:init([{Addr, AR, <<>>}, {ar_wallet:to_address(Pub2), AR, <<>>}, {ar_wallet:to_address(Pub3), AR, <<>>}]),
+	[Block] = ar_weave:init([{ar_wallet:to_address(Pub1), AR, <<>>}, {ar_wallet:to_address(Pub2), AR, <<>>}, {ar_wallet:to_address(Pub3), AR, <<>>}]),
 	{Master, Block} = start(Block),
 	assert_post_tx_to_master(Master, GoodTX),
 	assert_post_tx_to_master(Master, ToDelTX1),
@@ -31,6 +30,7 @@ removes_blacklisted_txs() ->
 	?assertEqual(ToDelTX2, ar_storage:read_tx(ToDelTX2#tx.id)),
 	ar_meta_db:put(content_policy_provider_urls, [URL]),
 	timer:sleep(5000),
+	?assertEqual(GoodTX, ar_storage:read_tx(GoodTX#tx.id)),
 	?assertEqual(unavailable, ar_storage:read_tx(ToDelTX1#tx.id)),
 	?assertEqual(unavailable, ar_storage:read_tx(ToDelTX2#tx.id)).
 

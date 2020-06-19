@@ -526,20 +526,36 @@ handle_cast({delete_tx_data, TXID}, State) ->
 			ar:err([{event, failed_to_delete_tx_data}, {reason, Reason}]);
 		{ok, Value} ->
 			{Offset, Size} = binary_to_term(Value),
-			StartKey = << (Offset - Size):?OFFSET_KEY_BITSIZE >>,
-			EndKey = << Offset:?OFFSET_KEY_BITSIZE >>,
-			ok = delete_tx_data_from_chunks(ChunksIndex, Offset, Size),
-			case ar_kv:delete_range(ChunksIndex, StartKey, EndKey) of
-				ok ->
-					ar_kv:delete(TXIndex, TXID);
-				{error, Reason} ->
-					ar:err([
-						{event, failed_to_delete_tx_data},
-						{reason, Reason}
-					])
-			end
+			ar_kv:delete(TXIndex, TXID),
+			gen_server:cast(?MODULE, {delete_chunks, ChunksIndex, Offset, Size})
 	end,
-	{noreply, State}.
+	{noreply, State};
+
+handle_cast({delete_chunks, ChunksIndex, Offset, Size}, State) ->
+	#sync_data_state{
+		sync_record = SyncRecord
+	} = State,
+	Key = << Offset:?OFFSET_KEY_BITSIZE >>,
+	UpdatedState = case catch {Size, ar_kv:get_next(ChunksIndex, Key)} of
+		{0, _} ->
+			State;
+		{Size, {ok, _, Value}} ->
+			{DataPathHash, _, _, _, _, ChunkSize} = binary_to_term(Value),
+			case ar_storage:delete_chunk(DataPathHash) of
+				ok ->
+					ar_kv:delete(ChunksIndex, Key),
+					gen_server:cast(?MODULE, {delete_chunks, ChunksIndex, Offset - ChunkSize, Size - ChunkSize}),
+					State#sync_data_state{
+						sync_record = ar_intervals:cut(SyncRecord, Offset)
+					};
+				{error, Reason} ->
+					ar:err([{event, failed_to_delete_chunks}, {reason, Reason}]),
+					State
+			end;
+			_ ->
+				State
+		end,
+	{noreply, UpdatedState}.
 
 handle_call(_Msg, _From, #sync_data_state{ status = not_joined } = State) ->
 	{reply, {error, not_joined}, State};
@@ -1453,22 +1469,6 @@ get_tx_data_from_chunks(Offset, Size, Map, Data) ->
 					get_tx_data_from_chunks(
 						Offset - ChunkSize, Size - ChunkSize, Map, [Chunk | Data])
 			end
-	end.
-
-delete_tx_data_from_chunks(_, _, 0) ->
-	ok;
-delete_tx_data_from_chunks(ChunksIndex, Offset, Size) ->
-	case catch ar_kv:get_next(ChunksIndex, << Offset:?OFFSET_KEY_BITSIZE >>) of
-		{ok, _, Value} ->
-			{DataPathHash, _, _, _, _, ChunkSize} = binary_to_term(Value),
-			case ar_storage:delete_chunk(DataPathHash) of
-				ok ->
-					delete_tx_data_from_chunks(ChunksIndex, Offset - ChunkSize, Size - ChunkSize);
-				{error, Reason} ->
-					ar:err([{event, failed_to_delete_chunk_of_tx_data}, {reason, Reason}])
-			end;
-		_ ->
-			ok
 	end.
 
 data_root_index_iterator(TXRootMap) ->
