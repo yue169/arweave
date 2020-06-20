@@ -48,7 +48,7 @@ handle_call(_, _, State) ->
 
 handle_cast(process_policy_content, State) ->
 	timer:apply_after(?CONTENT_POLICY_SCAN_INTERVAL, gen_server, cast, [?MODULE, process_policy_content]),
-	process_policy_content(ar_meta_db:get(content_policy_provider_urls)),
+	process_policy_content(ar_meta_db:get(content_policy_provider_urls, [])),
 	{noreply, State};
 
 handle_cast(_, State) ->
@@ -72,7 +72,6 @@ process_policy_content([URL|T]) ->
 			Opts = #{method => get, peer => Peer, path => FullPath, headers => Headers, is_peer_request => false},
 			case ar_http:req(Opts) of
 				{ok, {{_ ,_}, _, Data, _, _}} ->
-					binary:split(Data, <<"\n">>, [global]),
 					BlacklistTxIDs = process_policy_content_txs(binary:split(Data, <<"\n">>, [global]), []),
 					case ar_meta_db:get(content_policy_provider_tx_ids) of
 						not_found ->

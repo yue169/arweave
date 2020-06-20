@@ -519,7 +519,7 @@ handle_cast({delete_tx_data, TXID}, State) ->
 		tx_index = TXIndex,
 		chunks_index = ChunksIndex
 	} = State,
-	case ar_kv:get(TXIndex, TXID) of
+	case catch ar_kv:get(TXIndex, TXID) of
 		not_found ->
 			ok;
 		{error, Reason} ->
@@ -527,7 +527,9 @@ handle_cast({delete_tx_data, TXID}, State) ->
 		{ok, Value} ->
 			{Offset, Size} = binary_to_term(Value),
 			ar_kv:delete(TXIndex, TXID),
-			gen_server:cast(?MODULE, {delete_chunks, ChunksIndex, Offset, Size})
+			gen_server:cast(?MODULE, {delete_chunks, ChunksIndex, Offset, Size});
+		_ ->
+			ok
 	end,
 	{noreply, State};
 
@@ -552,9 +554,9 @@ handle_cast({delete_chunks, ChunksIndex, Offset, Size}, State) ->
 					ar:err([{event, failed_to_delete_chunks}, {reason, Reason}]),
 					State
 			end;
-			_ ->
-				State
-		end,
+		_ ->
+			State
+	end,
 	{noreply, UpdatedState}.
 
 handle_call(_Msg, _From, #sync_data_state{ status = not_joined } = State) ->
